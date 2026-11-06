@@ -3,7 +3,7 @@ import { layoutDependencyNodes } from './layout.ts';
 export interface Position { x: number; y: number }
 export interface NodeSize { width: number; height: number }
 export interface Viewport extends Position { zoom: number }
-export const WORKFLOW_PLUGIN_VERSION='0.17.1';
+export const WORKFLOW_PLUGIN_VERSION='0.17.3';
 export const WORKFLOW_API_VERSION=3;
 /** Native model identity only; provider configuration and credentials stay in DSH. */
 export interface WorkflowModelIdentity { provider: string; model: string; /** Provider-owned native reasoning effort; omitted follows the model default. */ reasoningEffort?: string }

@@ -1,0 +1,41 @@
+.wf-session-directory{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;position:relative;color:var(--text-primary,#dedede);font:12px/1.45 inherit;padding:6px 8px}
+.wf-session-directory button,.wf-directory-rail{font:inherit;color:inherit;background:transparent;border:0;border-radius:8px;cursor:pointer}
+.wf-session-directory button:hover:not(:disabled),.wf-directory-rail:hover{background:#8882}
+.wf-session-directory button:focus-visible,.wf-session-directory input:focus-visible{outline:2px solid #739ef5;outline-offset:-2px}
+.wf-session-directory button:disabled{opacity:.45;cursor:default}
+.wf-session-directory>header{display:flex;align-items:center;gap:8px;padding:4px 6px;color:#93969e;font-size:12px;min-height:30px}
+.wf-session-directory>header>span{flex:1;min-width:0}
+.wf-session-directory>header>button,.wf-directory-group-heading>button:not(.wf-directory-group-toggle),.wf-directory-search>button{display:flex;padding:6px;flex-shrink:0}
+.wf-directory-search{display:flex;align-items:center;gap:6px;min-width:0;margin:4px 2px 8px;padding:3px 6px;background:#8881;border:1px solid #8882;border-radius:9px;color:#92959d}
+.wf-directory-search input{width:0;flex:1;min-width:0;background:none;border:0;outline:none;color:inherit;padding:5px 0;font:inherit}
+.wf-directory-search>button.is-active{background:#759cf52b;color:#97b7fa}
+.wf-directory-groups{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:#6666 transparent}
+.wf-directory-group{margin-bottom:8px}
+.wf-directory-group-heading{display:flex;align-items:center;min-width:0;gap:1px}
+.wf-directory-group-toggle{display:flex;align-items:center;gap:7px;flex:1;min-width:0;text-align:left;padding:7px 4px}
+.wf-directory-group-toggle>span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.wf-directory-group-toggle>svg{flex-shrink:0;color:#9399a6;transition:transform .16s ease}
+.wf-directory-group-toggle>small{font-size:10px;color:#888d99;flex-shrink:0}
+.wf-directory-row{display:flex;align-items:center;gap:0;margin:1px 0 1px 13px;min-width:0;border-radius:8px}
+.wf-directory-row:hover,.wf-directory-row:focus-within{background:#8881}
+.wf-directory-row.is-current{background:#799dec20}
+.wf-directory-row.is-archived{opacity:.62}
+.wf-directory-session-open{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;min-height:32px;padding:6px!important}
+.wf-directory-session-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.wf-directory-status{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:13px;height:13px;color:#878c98}
+.wf-directory-status:is(.is-running,.is-waiting,.is-unread)::before{content:'';width:6px;height:6px;border-radius:50%;background:#82a9fc}
+.wf-directory-status.is-running::before{animation:wf-directory-pulse 1.5s ease-in-out infinite}
+.wf-directory-status.is-waiting::before{background:transparent;border:1px dashed #82a9fc;width:9px;height:9px;animation:wf-directory-pulse 1.3s ease-in-out infinite}
+.wf-directory-status.is-unread::before{background:#81bca7}
+.wf-directory-row-menu{display:flex;padding:6px 4px;flex-shrink:0;opacity:0}
+.wf-directory-row:hover>.wf-directory-row-menu,.wf-directory-row:focus-within>.wf-directory-row-menu{opacity:1}
+.wf-directory-empty,.wf-directory-error{padding:8px;color:#92959c;font-size:12px;overflow-wrap:anywhere}
+.wf-directory-error{color:#dc939d}
+.wf-directory-rail{display:flex;padding:10px;margin:4px auto;color:#b8bec9}
+.wf-session-directory .wf-context-menu{position:absolute;z-index:100;box-sizing:border-box;width:220px;max-width:calc(100% - 16px);padding:6px;background:#24262afc;color:#e2e4e9;border:1px solid #4d5058;border-radius:10px;box-shadow:0 12px 30px #0007;overflow:auto;scrollbar-width:thin}
+.wf-session-directory .wf-context-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px}
+.wf-session-directory .wf-context-menu .has-separator{border-top:1px solid #ffffff15;margin-top:5px;padding-top:5px}
+@keyframes wf-directory-pulse{50%{opacity:.3}}
+.wf-sidebar-grouping-menu{display:flex;align-items:center;width:100%;text-align:left;padding:9px 12px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;cursor:pointer}
+.wf-sidebar-grouping-menu:hover,.wf-sidebar-grouping-menu:focus-visible{background:#8882;outline:none}
+@media(prefers-reduced-motion:reduce){.wf-session-directory *{animation:none!important;transition:none!important}}

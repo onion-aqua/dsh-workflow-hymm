@@ -9,7 +9,7 @@ export interface NodeSize {
 export interface Viewport extends Position {
     zoom: number;
 }
-export declare const WORKFLOW_PLUGIN_VERSION = "0.17.1";
+export declare const WORKFLOW_PLUGIN_VERSION = "0.17.3";
 export declare const WORKFLOW_API_VERSION = 3;
 /** Native model identity only; provider configuration and credentials stay in DSH. */
 export interface WorkflowModelIdentity {

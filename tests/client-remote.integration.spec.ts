@@ -100,7 +100,7 @@ describe('Workflow native Client Remote assembly', () => {
     const owner = ctx.plugin(WorkflowPlugin);
     await owner;
     expect(ctx.get('remote.visualWorkflow')).toBeDefined();
-    expect([...slots.entries.keys()].sort()).toEqual(['main:visual-workflow', 'shell.overlay:visual-workflow', 'sidebar.panellist:visual-workflow']);
+    expect([...slots.entries.keys()].sort()).toEqual(['main:visual-workflow', 'shell.overlay:visual-workflow', 'sidebar.panellist.actions:visual-workflow.group-directory', 'sidebar.panellist:visual-workflow', 'sidebar.workspaces:undefined']);
     expect(locale.namespaces.has('visualWorkflow')).toBe(true);
     expect(document.head.querySelectorAll('[data-dsh-visual-workflow]')).toHaveLength(1);
 

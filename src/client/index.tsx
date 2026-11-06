@@ -17,6 +17,8 @@ import { TYPERT_REMOTE } from '../../lib/typert.remote-client.js'
 import { WorkflowClient } from './data.ts'
 import { WorkflowRuntimeClient, type WorkflowRuntimeApi } from './runtime-data.ts'
 import { WorkflowPanel } from './WorkflowPanel.tsx'
+import { WorkflowSessionSidebar, type WorkflowSidebarBindings } from './WorkflowSessionSidebar.tsx'
+import { installWorkflowSidebar } from './workflow-sidebar-registration.ts'
 import { createNativeUtilityBridge, openNativeUtilitySurface, type NativeUtilityBridge, type NativeUtilityServices, type UtilitySource } from './native-utility.ts'
 import '@xyflow/react/dist/style.css'
 import './styles.css'
@@ -118,6 +120,21 @@ function mountPanel(ctx: Context): void {
     select: id => { if (runtime.getSnapshot().busy) return; runtime.showWorkflow(); client.select(id) },
     create: () => { if (runtime.getSnapshot().busy) return; void client.create(ctx.locale.bind(NS)('newWorkflowName')).then(() => runtime.showWorkflow()) },
     change: client.change, rename: client.rename, retry: () => {setUtilityError();void client.retry(); void runtime.retry() } }
+  let groupedDirectory = true
+  try { groupedDirectory = localStorage.getItem('dsh-visual-workflow.directory-mode') !== 'native' } catch {}
+  const directory = installWorkflowSidebar(ctx, {
+    component: WorkflowSessionSidebar,
+    initiallyEnabled: groupedDirectory,
+    menuLabel: () => ctx.locale.bind(NS)('sidebarGroupByWorkflow'),
+    onEnabledChange: enabled => { try { localStorage.setItem('dsh-visual-workflow.directory-mode', enabled ? 'workflow' : 'native') } catch {} },
+    inject: () => ({
+      hooks: { workflow: client }, onOpenSession: bindings.openSession,
+      onOpenWorkflow: id => { if (runtime.getSnapshot().busy) return; bindings.select(id); canvas() },
+      onUseNativeDirectory: () => directory.useNativeDirectory(),
+      onPinSession: (id,pinned) => pinned ? ctx.uiWorkspace.pinSession(id as Parameters<Context['uiWorkspace']['pinSession']>[0]) : ctx.uiWorkspace.unpinSession(id as Parameters<Context['uiWorkspace']['unpinSession']>[0]),
+      onArchiveSession: (id,archived) => archived ? ctx.uiWorkspace.archiveSession(id as Parameters<Context['uiWorkspace']['archiveSession']>[0]) : ctx.uiWorkspace.unarchiveSession(id as Parameters<Context['uiWorkspace']['unarchiveSession']>[0]),
+    } satisfies WorkflowSidebarBindings),
+  })
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.dshVisualWorkflow = 'true'
