@@ -1,4 +1,4 @@
-# DSH Visual Workflow 0.17.3
+# DSH Visual Workflow 0.18.0
 
 面向 **DeepSeek Harness 0.2.1-rc.3** 的独立插件。使用当前版本的 Cordis、Client Slots、Typert、Storage Domain、Session Controller、Agent 和原生事件 API，不修改 Harness 本体。
 
@@ -64,7 +64,9 @@
 
 首次执行会新建 Session 或在来源的原生 completed turn/end 边界 Fork。每个排队请求在实际开始前重新解析已持久化的前驱上下文，确认路由后再向原生 Agent 提交；不同分叉、不同根任务及历史中间节点的新路径不会共用混杂上下文。导入、规划和分支操作不向来源 Session 提交消息。显式打开原生聊天后，用户仍可正常使用原生功能。
 
-原生 Fork 只能继承一条事件历史，无法直接合并独立 Session。多父任务若没有一条原生历史同时包含全部前驱，本次执行会在提交前失败并说明原因；请先选择单一路径，或编写明确的汇总任务。既有混杂聊天不自动改写；若前驱历史已经包含兄弟路径内容，需从干净历史分支重新执行前驱。检测到分支原生聊天新增内容时，后继会从干净的前驱边界 Fork；前驱边界本身已被污染时会阻止执行。插件内运行会串行校验和持久化路由；rc.3 未提供跨原生聊天和插件的原子历史版本锁，不应在同一目标 Session 同时手动发消息和运行工作流。工作目录仍由原生 Session 配置决定，Session 隔离不复制或隔离磁盘文件。
+原生 Fork 继承单条事件历史。对于 A → B/C → D 这样的多分支汇合，D 使用独立 Session，将 B、C 及必要共享前置任务的已完成可见结果作为带来源标识的数据输入；同一上游 Execution 只传一次，不拼接兄弟会话历史，不传模型思考或原始工具日志。结果从原生事件按确切 request、seq 与执行版本恢复，Workflow JSON 只保存来源引用与 SHA-256；空结果、结果变更或输入超过限制会明确失败，不静默截断。原始导入或手动历史分支的基线可以通过一次原生 Fork 保留；B、C 会话保持独立。汇合后的节点可继续执行、再次汇合及从历史结果分支；在主视图重跑上游会让旧汇合结果过期，历史分支保留当时的输入。执行过程面板可查看汇合输入来源。
+
+既有混杂聊天不自动改写；若前驱历史已经包含兄弟路径内容，需从干净历史分支重新执行前驱。检测到分支原生聊天新增内容时，后继会从干净的前驱边界 Fork；前驱边界本身已被污染时会阻止执行。插件内运行会串行校验和持久化路由；rc.3 未提供跨原生聊天和插件的原子历史版本锁，不应在同一目标 Session 同时手动发消息和运行工作流。工作目录仍由原生 Session 配置决定，Session 隔离不复制或隔离磁盘文件。
 
 规划采用专用 Agent，允许原生 read 工具只读取本次上传的已验证文件，其他文件、命令、写操作和委派仍由正式 tools.guard() 禁止。规划面板支持文件上传、进度、取消、重试、移除和模型切换；模型选择位于发送按钮左侧，宽度随名称调整，输入框随文字增高并在上限后滚动；原生提交确认前保留目标与附件。用户显式提交规划目标在 Manual / Suggest / Dynamic 下均可用；Manual 只禁止自动规划。工作流模型用于规划，确认后仅加入草稿与依赖。原生执行完成且输出合法 JSON 后进入计划审核；接受计划只创建草稿，每个任务通过运行按钮提交。每次执行在授权时固定实际 provider/model，支持同批次不同节点使用不同模型；只作用于对应的 Workflow 请求和分支，不修改原生 DSH 全局默认模型，完成后不会覆盖原生聊天的模型选择。所有执行模式只推进用户已点击运行的队列，保留旧策略枚举用于读取既有数据。失败或未知结果不自动重试。Dynamic 仅在该模式下成功执行后生成待审建议，不自动接受或运行。每个分支串行推进。
 
@@ -80,7 +82,7 @@ Workflow 只保存引用、摘要、计划、审批和操作意图。完整输�
 
 ```powershell
 $cli = "$env:LOCALAPPDATA\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd"
-& $cli plugin --profile desktop add 'C:\path\dsh-visual-workflow-0.16.3.tgz' --ignore-scripts
+& $cli plugin --profile desktop add 'C:\path\dsh-visual-workflow-0.18.0.tgz' --ignore-scripts
 ```
 
 停用/卸载使用原生插件管理或官方 plugin remove。数据保留在当前 storage root 的 visual_workflow.json；升级时备份 Phase 1 记录并转换为 schemaVersion 2，保留原图。旧版没有固定模型的等待请求在升级后会撤销，需核对当前模型并重新点击 Run。

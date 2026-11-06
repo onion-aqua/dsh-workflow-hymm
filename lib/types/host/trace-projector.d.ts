@@ -50,5 +50,8 @@ export declare function observableText(content: unknown): string;
 export declare function projectExecution(log: NativeSessionLog, identity: NativeProjectionIdentity): NativeExecutionProjection;
 /** Complete observable final text for structured plan parsing, never assistant.stream. */
 export declare function assistantTextForRequest(log: NativeSessionLog, requestId: string): string;
+/** Complete observable text for an exact execution boundary. Callers impose
+ * their own admission budget rather than inheriting the trace view's truncation. */
+export declare function assistantTextForExecution(log: NativeSessionLog, identity: NativeProjectionIdentity, endSeq: number): string;
 /** Read details from the native events when expanded; callers must not save this response in Workflow JSON. */
 export declare function readTraceStepDetails(log: NativeSessionLog, projection: NativeExecutionProjection, stepId: string): ExecutionStepDetails;

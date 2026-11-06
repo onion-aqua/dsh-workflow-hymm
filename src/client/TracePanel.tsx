@@ -15,6 +15,7 @@ export interface TraceStepSummary extends TraceStepCard {
 export interface TracePanelProps {
   nodeTitle:string;runId?:string;status?:string;loading?:boolean;error?:string;
   steps?:readonly TraceStepSummary[];executions?:readonly ExecutionCard[];detailsLoadingStepIds?:readonly string[];
+  resultInputLabels?:Readonly<Record<string,string>>;
   onSelectExecution?:(runId:string)=>void;onReadStep?:(stepId:string)=>void|Promise<void>;onOpenSession?:(sessionId:string)=>void;
   onClose:()=>void;t?:Translate;
   onHeaderPointerDown?:(event:ReactPointerEvent<HTMLElement>)=>void;pinned?:boolean;
@@ -60,7 +61,7 @@ function shellCommand(step:TraceStepSummary):string|undefined{
   return;
 }
 
-export function TracePanel({nodeTitle,runId,status,loading=false,error,steps=[],executions=[],detailsLoadingStepIds=[],onSelectExecution,onReadStep,onOpenSession,onClose,onHeaderPointerDown,pinned=false,t=translateZh}:TracePanelProps){
+export function TracePanel({nodeTitle,runId,status,loading=false,error,steps=[],executions=[],detailsLoadingStepIds=[],resultInputLabels={},onSelectExecution,onReadStep,onOpenSession,onClose,onHeaderPointerDown,pinned=false,t=translateZh}:TracePanelProps){
   const [expanded,setExpanded]=useState<Set<string>>(()=>new Set());const [copied,setCopied]=useState<string|null>(null);
   useEffect(()=>{setExpanded(new Set());setCopied(null);},[runId]);
   useEffect(()=>{
@@ -80,6 +81,14 @@ export function TracePanel({nodeTitle,runId,status,loading=false,error,steps=[],
     <header className="wf-trace-header" title={nodeTitle} data-draggable={Boolean(onHeaderPointerDown)} onPointerDown={onHeaderPointerDown}><Icon name="trace" size={15}/><strong title={nodeTitle}>{pinned?nodeTitle:t('traceCompactTitle')}</strong><div className="wf-trace-meta"><span className={`wf-tag wf-tag--${displayedStatus}`}>{loading?t('traceReading'):error&&!executionError?t('traceReadError'):status||execution?executionStatusText(displayedStatus,t):t('notExecuted')}</span><span className="wf-trace-count" title={t('traceStepCount',{count:rows.length})}>{rows.length}</span></div>{execution&&onOpenSession&&<button className="wf-icon-button" aria-label={t('openConversation')} title={t('openConversation')} onClick={()=>onOpenSession(execution.sessionId)}><Icon name="chat" size={14}/></button>}<button className="wf-icon-button" aria-label={t('traceClose')} data-testid="trace-close" onClick={onClose}><Icon name="close" size={15}/></button></header>
     {executions.length>1&&<div className="wf-trace-execution"><select aria-label={t('executionHistory')} data-testid="execution-select" value={runId??''} onChange={event=>onSelectExecution?.(event.target.value)}>{executions.map((item,index)=><option key={item.runId} value={item.runId}>{`#${index+1} · v${item.nodeRevision} · ${executionStatusText(item.status,t)}`}</option>)}</select></div>}
     <div className="wf-trace-body"><span className="wf-sr-only">{nodeTitle}</span>
+      {!!execution?.resultInputs?.length&&<details className="wf-trace-result-inputs" data-testid="trace-result-inputs" key={execution.runId}>
+        <summary>{t('traceResultInputs',{count:execution.resultInputs.length})}</summary>
+        <p>{t('traceResultInputsHint')}</p>
+        <div className="wf-trace-result-sources">{execution.resultInputs.map(input=><div className="wf-trace-result-source" key={input.runId} data-testid={`trace-result-input-${input.runId}`}>
+          <div><strong>{resultInputLabels[input.runId]??input.runId}</strong>{onOpenSession&&<button className="wf-icon-button" aria-label={t('traceOpenInputSession')} title={t('traceOpenInputSession')} onClick={()=>onOpenSession(input.sessionId)}><Icon name="chat" size={13}/></button>}</div>
+          <code title={input.sessionId}>Session · {input.sessionId}</code><code>{t('traceSequence')} · {input.startSeq}–{input.endSeq}</code>
+        </div>)}</div>
+      </details>}
       {loading?<div className="wf-trace-loading" role="status"><div/><div/><div/><span>{t('traceLoading')}</span></div>:error?<div className="wf-trace-empty wf-trace-error"><Icon name="trace" size={22}/><strong>{t(executionError?'traceExecutionFailed':'traceErrorTitle')}</strong><p>{error}</p></div>:rows.length===0?<div className="wf-trace-empty" data-testid="trace-empty"><Icon name="trace" size={22}/><strong>{t('traceEmptyTitle')}</strong><p>{t('traceEmptyDescription')}</p><span className="wf-sr-only">{t('traceStepCount',{count:0})}</span></div>:<div className="wf-trace-steps">{rows.map(step=>{
         const row=rowPresentation(step,t);const depth=rowDepth(step,rows);const command=shellCommand(step);const shell=step.type==='command'||step.actionKind==='command';const isOpen=expanded.has(step.id);const detailLoading=detailsLoadingStepIds.includes(step.id);
         return <div className={`wf-trace-step wf-trace-step--${step.status} ${depth?'is-child':''}`} key={step.id} style={{'--trace-depth':depth} as CSSProperties}>

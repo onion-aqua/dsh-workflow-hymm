@@ -1,4 +1,4 @@
-import type { Position, Viewport, WorkflowNodeAttachment, WorkflowPendingQuestion, WorkflowQuestionAnswer, WorkflowAccessOption, WorkflowPendingApproval, WorkflowApprovalDecision, WorkflowPreferences, WorkflowWorkspaceOption, WorkflowSessionArchivePreviewValue, WorkflowSessionArchiveValue } from '../shared/model.ts';
+import type { Position, Viewport, WorkflowNodeAttachment, WorkflowPendingQuestion, WorkflowQuestionAnswer, WorkflowAccessOption, WorkflowPendingApproval, WorkflowApprovalDecision, WorkflowPreferences, WorkflowWorkspaceOption, WorkflowSessionArchivePreviewValue, WorkflowSessionArchiveValue, ExecutionResultInput } from '../shared/model.ts';
 import type { RemoveNodeFile, UploadNodeFiles } from './NodeFileAttachments.tsx';
 import type { NativeUtilityBridge } from './native-utility.ts';
 
@@ -34,6 +34,8 @@ export interface ExecutionCard {
   branchId: string;
   sessionId: string;
   status: string;
+  requestId?: string;
+  startSeq?: number;
   createdAt: number;
   updatedAt: number;
   summary?: string;
@@ -41,6 +43,8 @@ export interface ExecutionCard {
   terminalReason?: string;
   durability?: string;
   endSeq?: number;
+  /** Provenance references only; result content stays in native Session persistence. */
+  resultInputs?: readonly ExecutionResultInput[];
   waitingReason?: 'prerequisites' | 'stale_prerequisites' | 'branch_busy' | 'subagent_capacity' | 'subagent_unavailable';
 }
 export interface PlanTaskCard {

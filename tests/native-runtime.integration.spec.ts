@@ -524,7 +524,7 @@ describe('released rc.3 Agent / Controller / Session / JSONL integration', () =>
     expect(await physicalLog(directory, source.sessionId)).toEqual(sourceBytes);
   }, 15000);
 
-  it('fails a cross-Session canvas merge before native admission and preserves that explicit empty trace after restart', async () => {
+  it('transfers explicit results into a cross-Session join and restores its real native trace and input references after restart', async () => {
     const first = await open();
     const source = await first.runtime.create({ cwd: first.directory });
     await execute(first.runtime, source.sessionId, 'merge-source', 'MERGE_SOURCE_CONTEXT_TOKEN');
@@ -535,7 +535,7 @@ describe('released rc.3 Agent / Controller / Session / JSONL integration', () =>
         { id: 'merge-a', title: 'Merge common A', instruction: 'MERGE_COMMON_A_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 450, y: 100 } },
         { id: 'merge-b', title: 'Merge left B', instruction: 'MERGE_LEFT_B_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 850, y: 0 } },
         { id: 'merge-c', title: 'Merge right C', instruction: 'MERGE_RIGHT_C_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 850, y: 250 } },
-        { id: 'merge-d', title: 'Merge D', instruction: 'MERGE_MUST_NOT_DISPATCH_D_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 1250, y: 100 } },
+        { id: 'merge-d', title: 'Merge D', instruction: 'MERGE_DISPATCH_D_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 1250, y: 100 } },
       ], edges: [
         { id: 'merge-a-b', source: 'merge-a', target: 'merge-b', type: 'dependency' },
         { id: 'merge-a-c', source: 'merge-a', target: 'merge-c', type: 'dependency' },
@@ -555,26 +555,51 @@ describe('released rc.3 Agent / Controller / Session / JSONL integration', () =>
     const sessionIds = [...new Set([source.sessionId, ...beforeMerge.branches!.map(branch => branch.sessionId)])];
     const beforeBytes = new Map(await Promise.all(sessionIds.map(async sessionId => [sessionId, await physicalLog(first.directory, sessionId)] as const)));
     const count = first.model.calls.length;
-    const rejected = await service.run({ workflowId: imported.id, nodeId: 'merge-d', operationId: 'reject-cross-session-merge' });
-    await vi.waitFor(async () => expect((await service.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === rejected.runId)).toMatchObject({ status: 'failed', durability: 'durable', terminalReason: 'context-isolation-required' }), { timeout: 5000, interval: 20 });
-    const failed = (await service.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === rejected.runId)!;
-    expect(failed.startSeq).toBeUndefined();
-    expect(failed.endSeq).toBeUndefined();
-    expect(failed.error).toBeTruthy();
-    expect(first.model.calls).toHaveLength(count);
-    expect(first.model.calls.some(call => JSON.stringify(call.messages).includes('MERGE_MUST_NOT_DISPATCH_D_TOKEN'))).toBe(false);
-    const trace = (await service.trace({ workflowId: imported.id, runId: failed.runId })).trace;
-    expect(trace).toMatchObject({ status: 'failed', terminalReason: 'context-isolation-required', steps: [] });
+    const admitted = await service.run({ workflowId: imported.id, nodeId: 'merge-d', operationId: 'complete-cross-session-join' });
+    await vi.waitFor(async () => expect((await service.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === admitted.runId)).toMatchObject({ status: 'completed', durability: 'durable', terminalReason: 'completed' }), { timeout: 5000, interval: 20 });
+    const completed = (await service.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === admitted.runId)!;
+    expect(completed.startSeq).toBeTypeOf('number');
+    expect(completed.endSeq).toBeTypeOf('number');
+    expect(completed.error).toBeUndefined();
+    expect(sessionIds).not.toContain(completed.sessionId);
+    expect(first.model.calls).toHaveLength(count + 1);
+    expect(new Set(completed.inputRunIds)).toEqual(new Set([left.runId, right.runId]));
+    expect(completed.resultInputs).toHaveLength(3);
+    expect(new Set(completed.resultInputs!.map(input => input.runId))).toEqual(new Set(beforeMerge.executions!.map(run => run.runId)));
+    expect(completed.resultInputBranchId).toBe(beforeMerge.activeBranchId);
+    const context = modelContextFor(first.model, 'MERGE_DISPATCH_D_TOKEN');
+    for (const token of ['MERGE_SOURCE_CONTEXT_TOKEN', 'MERGE_COMMON_A_TOKEN', 'MERGE_LEFT_B_TOKEN', 'MERGE_RIGHT_C_TOKEN']) expect(context).toContain(token);
+    const joinLog = await first.runtime.read(completed.sessionId),prompt = joinLog.events.find(event => event.type === 'user/message' && (event.data.source as {rpcId?:string}).rpcId === completed.requestId)!;
+    const text = (prompt.data.content as Array<{type:string;text?:string}>).filter(block => block.type === 'text').map(block => block.text).join('');
+    const records = JSON.parse(text.slice(text.lastIndexOf('\n[') + 1)) as Array<{source:{nodeId:string;runId:string};result:string}>;
+    expect(records.map(input => input.source.nodeId)).toEqual(['merge-a', 'merge-b', 'merge-c']);
+    expect(records.find(input => input.source.nodeId === 'merge-b')!.result).toContain('MERGE_LEFT_B_TOKEN');
+    expect(records.find(input => input.source.nodeId === 'merge-c')!.result).toContain('MERGE_RIGHT_C_TOKEN');
+    const trace = (await service.trace({ workflowId: imported.id, runId: completed.runId })).trace;
+    expect(trace).toMatchObject({ status: 'completed', terminalReason: 'completed' });
+    expect(trace.steps.some(step => step.type === 'agent_step')).toBe(true);
+    for (const step of trace.steps) expect(joinLog.events.some(event => event.seq === step.eventStartSeq)).toBe(true);
     for (const [sessionId, bytes] of beforeBytes) expect(await physicalLog(first.directory, sessionId)).toEqual(bytes);
-    expect((await service.get({ id: imported.id })).workflow!.branches!.map(branch => ({ id: branch.id, sessionId: branch.sessionId }))).toEqual(beforeMerge.branches!.map(branch => ({ id: branch.id, sessionId: branch.sessionId })));
+    expect((await service.get({ id: imported.id })).workflow!.branches).toHaveLength(beforeMerge.branches!.length + 1);
+    const joinBytes = await physicalLog(first.directory, completed.sessionId);
     await first.ctx.fiber.dispose();
 
     const second = await open(first.directory);
     const recovered = await mountWorkflow(second.ctx, first.directory);
-    expect((await recovered.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === failed.runId)).toMatchObject({ status: 'failed', durability: 'durable', terminalReason: 'context-isolation-required' });
-    expect((await recovered.trace({ workflowId: imported.id, runId: failed.runId })).trace).toEqual(trace);
-    expect((await recovered.run({ workflowId: imported.id, nodeId: 'merge-d', operationId: 'reject-cross-session-merge' })).runId).toBe(failed.runId);
+    expect((await recovered.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === completed.runId)).toMatchObject({ status: 'completed', durability: 'durable', terminalReason: 'completed', inputRunIds: completed.inputRunIds, resultInputs: completed.resultInputs, resultInputBranchId: completed.resultInputBranchId });
+    expect((await recovered.trace({ workflowId: imported.id, runId: completed.runId })).trace).toEqual(trace);
+    expect((await recovered.run({ workflowId: imported.id, nodeId: 'merge-d', operationId: 'complete-cross-session-join' })).runId).toBe(completed.runId);
     expect(second.model.calls).toHaveLength(0);
+    expect(await physicalLog(first.directory, completed.sessionId)).toEqual(joinBytes);
+    for (const [sessionId, bytes] of beforeBytes) expect(await physicalLog(first.directory, sessionId)).toEqual(bytes);
+    await updateNativeTestGraph(recovered, imported.id, current => ({ ...current,
+      nodes: [...current.nodes, { id: 'merge-e', title: 'Merge E', instruction: 'MERGE_CONTINUE_E_TOKEN', source: 'user', status: 'draft', revision: 1, position: { x: 1650, y: 100 } }],
+      edges: [...current.edges, { id: 'merge-d-e', source: 'merge-d', target: 'merge-e', type: 'dependency' }],
+    }));
+    const continued = await recovered.run({ workflowId: imported.id, nodeId: 'merge-e', operationId: 'continue-restored-cross-session-join' });
+    await vi.waitFor(async () => expect((await recovered.get({ id: imported.id })).workflow!.executions!.find(run => run.runId === continued.runId)).toMatchObject({ status: 'completed', durability: 'durable', inputRunIds: [completed.runId] }), { timeout: 5000, interval: 20 });
+    const continuationContext = modelContextFor(second.model, 'MERGE_CONTINUE_E_TOKEN');
+    for (const token of ['MERGE_DISPATCH_D_TOKEN', 'MERGE_LEFT_B_TOKEN', 'MERGE_RIGHT_C_TOKEN']) expect(continuationContext).toContain(token);
     for (const [sessionId, bytes] of beforeBytes) expect(await physicalLog(first.directory, sessionId)).toEqual(bytes);
   }, 15000);
 

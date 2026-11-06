@@ -114,6 +114,10 @@ export declare class VisualWorkflowService extends TypertRemoteService {
     private generatePlanAction;
     applyPlan(request: M.WorkflowApplyPlanRequest): Promise<M.WorkflowActionValue>;
     private branchBusy;
+    /** Shared ancestors appear once, with the exact executions visible in this scope. */
+    private resultInputRuns;
+    private readResultInputs;
+    private rejectQueuedExecution;
     /** Resolve late: a user can queue children before their parent's durable endSeq exists. */
     private routeQueuedExecution;
     private forkQueuedContext;

@@ -123,26 +123,35 @@ function manualBranchScope(branch:BranchCard,branches:readonly BranchCard[]):str
   return undefined;
 }
 
-/** Manual scopes show their automatic paths; native ancestry always respects every fork cap. */
-export function executionVisibleInBranch(run:ExecutionCard, branchId:string|null|undefined, branches:readonly BranchCard[]):boolean {
+/** Physical containment remains separate from result references. */
+function executionHistoryContains(run:ExecutionCard,branch:BranchCard,branches:readonly BranchCard[],boundary=Infinity):boolean {
+  if(run.endSeq===undefined)return false;
+  const visited=new Set<string>();
+  let ancestor=branch;
+  let cap=boundary;
+  while(!visited.has(ancestor.id)){
+    visited.add(ancestor.id);
+    if(ancestor.sessionId===run.sessionId)return run.endSeq<=cap;
+    if(!ancestor.parentBranchId)return false;
+    if(ancestor.forkBoundarySeq===undefined)return false;
+    const parent=branches.find(item=>item.id===ancestor.parentBranchId);
+    if(!parent||parent.sessionId!==ancestor.sourceSessionId)return false;
+    cap=Math.min(cap,ancestor.forkBoundarySeq);
+    ancestor=parent;
+  }
+  return false;
+}
+
+/** Manual scopes show their automatic paths. A completed native carrier can
+ * also expose its exact result inputs; this does not create native ancestry. */
+export function executionVisibleInBranch(run:ExecutionCard, branchId:string|null|undefined, branches:readonly BranchCard[],executions:readonly ExecutionCard[]=[]):boolean {
   if(!branchId||run.branchId===branchId)return true;
   const branch=branches.find(item=>item.id===branchId);
   const runBranch=branches.find(item=>item.id===run.branchId);
   if(branch&&branch.automatic!==true&&runBranch&&manualBranchScope(runBranch,branches)===branch.id)return true;
   if(!branch?.nodeIds.includes(run.nodeId))return false;
-  const visited=new Set<string>();
-  let ancestor=branch;
-  let cap=Infinity;
-  while(ancestor.parentBranchId&&!visited.has(ancestor.id)){
-    visited.add(ancestor.id);
-    if(ancestor.forkBoundarySeq===undefined)return false;
-    const parent=branches.find(item=>item.id===ancestor.parentBranchId);
-    if(!parent||parent.sessionId!==ancestor.sourceSessionId)return false;
-    cap=Math.min(cap,ancestor.forkBoundarySeq);
-    if(ancestor.sourceSessionId===run.sessionId&&run.endSeq!==undefined&&run.endSeq<=cap)return true;
-    ancestor=parent;
-  }
-  return false;
+  if(executionHistoryContains(run,branch,branches))return true;
+  return executions.some(carrier=>carrier.status==='completed'&&carrier.durability==='durable'&&carrier.resultInputs?.some(input=>input.runId===run.runId&&input.sessionId===run.sessionId&&input.requestId===run.requestId&&input.startSeq===run.startSeq&&input.endSeq===run.endSeq)&&executionHistoryContains(carrier,branch,branches));
 }
 
 /** Reject ambiguous or cyclic dependencies before sending the graph to the Host. */

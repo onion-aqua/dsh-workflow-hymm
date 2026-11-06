@@ -65,7 +65,13 @@ class LocalWorkflowModel extends LlmAdapter {
       attachmentEvidence=results.flatMap(message=>message.content).filter(block=>block.type==='text').map(block=>block.text).join('\n').slice(0,12000);
       if(!attachmentEvidence)throw new Error('Native planning file reads returned no text evidence.');
     }
-    const text=prompt.startsWith('You are drafting')&&prompt.includes('PLAN_QUERY_OUTCOME')?JSON.stringify({tasks:[
+    const text=prompt.startsWith('You are drafting')&&prompt.includes('JOIN_RESULTS_PLAN')?JSON.stringify({tasks:[
+      {id:'join-a',title:'A · 整理测试输入',instruction:'LOCAL_FIXTURE JOIN_RESULTS_TASK_A：返回本地测试的初始数据，不调用工具，不写文件。',dependsOn:[]},
+      {id:'join-b',title:'B · 独立数据一',instruction:'LOCAL_FIXTURE JOIN_RESULTS_TASK_B：根据初始数据返回第一份本地测试结果，不调用工具，不写文件。',dependsOn:['join-a']},
+      {id:'join-c',title:'C · 独立数据二',instruction:'LOCAL_FIXTURE JOIN_RESULTS_TASK_C：根据初始数据返回第二份本地测试结果，不调用工具，不写文件。',dependsOn:['join-a']},
+      {id:'join-d',title:'D · 汇合两份结果',instruction:'LOCAL_FIXTURE JOIN_RESULTS_TASK_D：汇合两份独立结果，返回本地测试汇总，不调用工具，不写文件。',dependsOn:['join-b','join-c']},
+      {id:'join-e',title:'E · 检查汇合结果',instruction:'LOCAL_FIXTURE JOIN_RESULTS_TASK_E：根据汇合结果返回本地测试验收结论，不调用工具，不写文件。',dependsOn:['join-d']},
+    ]}):prompt.startsWith('You are drafting')&&prompt.includes('PLAN_QUERY_OUTCOME')?JSON.stringify({tasks:[
       {id:'province-weather',title:'确认城市范围并查询天气',instruction:'LOCAL_FIXTURE：先确认浙江省“一线城市”的口径和名单，无法确定时先询问用户；确认后查询这些城市的当前天气，列出时间和来源。',dependsOn:[]},
       {id:'ningbo-weather',title:'查询宁波天气并汇总',instruction:'LOCAL_FIXTURE：上一步完成后查询宁波当前天气，返回时间、天气、温度及来源，并简要汇总两次查询。',dependsOn:['province-weather']},
     ]}):prompt.startsWith('You are drafting')&&prompt.includes('PLAN_OMITTED_DEPENDENCIES')?JSON.stringify({tasks:[

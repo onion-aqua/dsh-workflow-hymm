@@ -9,7 +9,7 @@ export interface NodeSize {
 export interface Viewport extends Position {
     zoom: number;
 }
-export declare const WORKFLOW_PLUGIN_VERSION = "0.17.3";
+export declare const WORKFLOW_PLUGIN_VERSION = "0.18.0";
 export declare const WORKFLOW_API_VERSION = 3;
 /** Native model identity only; provider configuration and credentials stay in DSH. */
 export interface WorkflowModelIdentity {
@@ -115,6 +115,15 @@ export interface TurnRef {
     endSeq?: number;
     reason?: string;
 }
+/** Complete visible results read from native events; text remains in Session persistence. */
+export interface ExecutionResultInput {
+    runId: string;
+    sessionId: string;
+    requestId: string;
+    startSeq: number;
+    endSeq: number;
+    sha256: string;
+}
 export interface Execution {
     runId: string;
     nodeId: string;
@@ -145,6 +154,10 @@ export interface Execution {
     };
     /** Exact direct task inputs, resolved immediately before native admission. */
     inputRunIds?: string[];
+    /** Explicit result transfer for a DAG join, distinct from physical Fork inheritance. */
+    resultInputs?: ExecutionResultInput[];
+    /** Original view used to revalidate upstream freshness after a prepared join restarts. */
+    resultInputBranchId?: string;
     /** Resolved at explicit Run admission and never changed by later selection edits. */
     resolvedModel?: WorkflowModelIdentity;
     resolvedAccessMode?: string;

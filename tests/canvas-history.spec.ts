@@ -106,4 +106,31 @@ describe('Canvas shared history visibility',()=>{
     expect(executionVisibleInBranch(run,'logical-child',branches)).toBe(false);
     expect(executionVisibleInBranch({...run,branchId:'scope',sessionId:'scope-session'},'logical-child',branches)).toBe(false);
   });
+  it('shows exact upstream results through a completed join carrier and respects every later physical fork cap',()=>{
+    const branches:BranchCard[]=[
+      {id:'scope',label:'TEST scope',sessionId:'scope-session',nodeIds:['a','b','join']},
+      {id:'left',label:'TEST left',sessionId:'left-session',sourceSessionId:'scope-session',parentBranchId:'scope',forkBoundarySeq:9,nodeIds:['a'],automatic:true},
+      {id:'right',label:'TEST right',sessionId:'right-session',sourceSessionId:'scope-session',parentBranchId:'scope',forkBoundarySeq:9,nodeIds:['b'],automatic:true},
+      {id:'join',label:'TEST result join',sessionId:'join-session',parentBranchId:'scope',nodeIds:['a','b','join'],automatic:true},
+      {id:'manual-after',label:'TEST after join',sessionId:'after-session',sourceSessionId:'join-session',parentBranchId:'join',forkBoundarySeq:14,nodeIds:['a','b','join']},
+      {id:'manual-before',label:'TEST before join end',sessionId:'before-session',sourceSessionId:'join-session',parentBranchId:'join',forkBoundarySeq:13,nodeIds:['a','b','join']},
+    ];
+    const left:ExecutionCard={runId:'left-run',requestId:'left-request',nodeId:'a',nodeRevision:1,branchId:'left',sessionId:'left-session',status:'completed',durability:'durable',createdAt:1,updatedAt:1,startSeq:10,endSeq:20};
+    const right:ExecutionCard={...left,runId:'right-run',requestId:'right-request',nodeId:'b',branchId:'right',sessionId:'right-session',endSeq:25};
+    const carrier:ExecutionCard={...left,runId:'join-run',requestId:'join-request',nodeId:'join',branchId:'join',sessionId:'join-session',startSeq:0,endSeq:14,resultInputs:[left,right].map(run=>({runId:run.runId,sessionId:run.sessionId,requestId:run.requestId!,startSeq:run.startSeq!,endSeq:run.endSeq!,sha256:'a'.repeat(64)}))};
+    const runs=[left,right,carrier];
+    expect(executionVisibleInBranch(left,'join',branches,runs)).toBe(true);
+    expect(executionVisibleInBranch(right,'join',branches,runs)).toBe(true);
+    expect(executionVisibleInBranch(left,'manual-after',branches,runs)).toBe(true);
+    expect(executionVisibleInBranch(right,'manual-before',branches,runs)).toBe(false);
+    expect(executionVisibleInBranch(right,'left',branches,runs)).toBe(false);
+    // The same node's later rerun is not the specific result that was imported.
+    expect(executionVisibleInBranch({...left,runId:'left-rerun'},'join',branches,runs)).toBe(false);
+    expect(executionVisibleInBranch({...left,endSeq:21},'join',branches,runs)).toBe(false);
+    expect(executionVisibleInBranch({...left,requestId:'different-request'},'join',branches,runs)).toBe(false);
+    expect(executionVisibleInBranch(left,'join',branches,[...runs.slice(0,2),{...carrier,status:'running'}])).toBe(false);
+    expect(executionVisibleInBranch(left,'join',branches,[...runs.slice(0,2),{...carrier,durability:'pending'}])).toBe(false);
+    expect(executionVisibleInBranch(left,'join',branches,[...runs.slice(0,2),{...carrier,endSeq:undefined}])).toBe(false);
+    expect(executionVisibleInBranch(left,'join',branches)).toBe(false);
+  });
 });

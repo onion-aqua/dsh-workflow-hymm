@@ -22,6 +22,7 @@ import { NativeContextControls, NativeContextError } from './native-context.ts';
 import { NativeSkillCatalog } from './native-skills.ts';
 import { verifiedCompactionCheckpoints, compactionContinuationBoundary } from './compaction-history.ts';
 import { recommendedAnswers } from './question-automation.ts';
+import { readExecutionResultInput, buildResultInputTask } from './execution-inputs.ts';
 export type * from '../shared/model.ts';
 
 const initialLayout: M.CatalogLayout = { revision:0,positions:{},viewport:{x:0,y:0,zoom:1} };
@@ -85,7 +86,7 @@ function fingerprint(workflow:M.Workflow,node:M.WorkflowNode,resolvedModel?:M.Wo
 }
 function revisions(node:M.WorkflowNode,workflow:M.Workflow):M.NodeRevision[]{return node.revisions?.length?node.revisions:[{revision:node.revision,title:node.title,instruction:node.instruction,dependencies:dependencies(workflow,node.id),createdAt:workflow.createdAt,attachments:node.attachments,model:node.model}];}
 function activeExecution(run:M.Execution):boolean{return ['running','ready','waiting_answer'].includes(run.status)||run.status==='blocked'&&run.endSeq===undefined;}
-function localQueueRecord(run:M.Execution):boolean{return run.status==='waiting'||run.terminalReason==='queue-cancelled'||run.terminalReason==='authorization-invalidated'||run.terminalReason==='context-isolation-required'||run.terminalReason==='workflow-deleted'||run.terminalReason==='workflow-paused';}
+function localQueueRecord(run:M.Execution):boolean{return run.status==='waiting'||run.terminalReason==='queue-cancelled'||run.terminalReason==='authorization-invalidated'||run.terminalReason==='context-isolation-required'||run.terminalReason==='dependency-results-unavailable'||run.terminalReason==='workflow-deleted'||run.terminalReason==='workflow-paused';}
 function queueAuthorized(workflow:M.Workflow,run:M.Execution):boolean{
   const node=workflow.nodes.find(item=>item.id===run.nodeId);
   return !!node&&!!run.resolvedModel&&node.revision===run.nodeRevision&&run.authorizationFingerprint===fingerprint(workflow,node,run.resolvedModel)&&workflow.approvals!.some(approval=>approval.nodeId===node.id&&approval.nodeRevision===node.revision&&approval.decision==='approved'&&approval.fingerprint===run.authorizationFingerprint);
@@ -115,11 +116,21 @@ function historyContains(workflow:M.Workflow,run:M.Execution,branch:M.Branch,bou
   }
   return false;
 }
+function referencesResult(input:M.ExecutionResultInput,run:M.Execution):boolean{
+  return input.runId===run.runId&&input.sessionId===run.sessionId&&input.requestId===run.requestId&&input.startSeq===run.startSeq&&input.endSeq===run.endSeq;
+}
+/** Result transfer is explicit data provenance, never a second native parent. */
+function contextContains(workflow:M.Workflow,run:M.Execution,branch:M.Branch,boundary=Infinity):boolean{
+  if(historyContains(workflow,run,branch,boundary))return true;
+  return workflow.executions!.some(carrier=>carrier.status==='completed'&&carrier.durability==='durable'&&carrier.resultInputs?.some(input=>referencesResult(input,run))&&historyContains(workflow,carrier,branch,boundary));
+}
 function runVisible(workflow:M.Workflow,run:M.Execution,branch:M.Branch):boolean{
   if(run.branchId===branch.id)return true;
   const owner=workflow.branches!.find(item=>item.id===run.branchId);
   if(!branch.automatic&&owner?.automatic&&manualScope(workflow,owner).id===branch.id)return true;
-  return branch.nodeIds.includes(run.nodeId)&&historyContains(workflow,run,branch);
+  // A prepared join must also be able to validate its frozen inputs before its
+  // first prompt exists. Visibility does not assert native history inheritance.
+  return branch.nodeIds.includes(run.nodeId)&&(contextContains(workflow,run,branch)||workflow.executions!.some(carrier=>carrier.branchId===branch.id&&carrier.resultInputs?.some(input=>referencesResult(input,run))));
 }
 /** Completion is historical; eligibility also requires current upstream inputs.
  * Evaluate against the requested view so an explicit historical fork can retain
@@ -140,7 +151,7 @@ function contextCheck(workflow:M.Workflow,branch:M.Branch|undefined){
     const valid=dependencies(workflow,run.nodeId).every(id=>{
       if(nodes.get(id)?.kind==='session')return true;
       const required=latest(id);
-      return !!required&&(!run.inputRunIds||run.inputRunIds.includes(required.runId))&&historyContains(workflow,required,owner,run.endSeq)&&current(required);
+      return !!required&&(!run.inputRunIds||run.inputRunIds.includes(required.runId))&&contextContains(workflow,required,owner,run.endSeq)&&current(required);
     });
     checking.delete(run.runId);validity.set(run.runId,valid);return valid;
   };
@@ -1057,6 +1068,32 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
   private branchBusy(workflow:M.Workflow,branch:M.Branch):boolean{
     return this.compactFlights.has(`${workflow.id}:${branch.sessionId}`)||workflow.operations!.some(operation=>operation.kind==='compact'&&operation.sourceSessionId===branch.sessionId&&['pending','needs-reconcile'].includes(operation.status))||this.runtime().isRunning(branch.sessionId)||workflow.executions!.some(run=>run.branchId===branch.id&&(activeExecution(run)||run.status==='unknown'||run.durability==='needs-reconcile'));
   }
+  /** Shared ancestors appear once, with the exact executions visible in this scope. */
+  private resultInputRuns(workflow:M.Workflow,nodeId:string,branch:M.Branch):M.Execution[]{
+    const check=contextCheck(workflow,branch),seen=new Set<string>(),inputs:M.Execution[]=[];
+    const visit=(id:string)=>{
+      for(const run of check.inputs(id)){
+        if(seen.has(run.runId))continue;
+        if(!check.current(run))throw new Error('上游结果已过期或尚未完成，请先完成前置节点。');
+        seen.add(run.runId);visit(run.nodeId);inputs.push(run);
+      }
+    };
+    visit(nodeId);return inputs;
+  }
+  private async readResultInputs(workflow:M.Workflow,runs:readonly M.Execution[]){
+    const logs=new Map<string,NativeSessionLog>();
+    const inputs=[];
+    for(const run of runs){
+      let log=logs.get(run.sessionId);if(!log){log=await this.runtime().read(run.sessionId);logs.set(run.sessionId,log);}
+      const node=workflow.nodes.find(node=>node.id===run.nodeId);if(!node)throw new Error('上游结果所属的任务已不存在。');
+      inputs.push(readExecutionResultInput(log,run,node));
+    }
+    return inputs;
+  }
+  private async rejectQueuedExecution(workflowId:string,runId:string,message:string,terminalReason='context-isolation-required'):Promise<M.Execution>{
+    const saved=await this.write(workflowId,item=>({...item,executions:item.executions!.map(candidate=>candidate.runId===runId?{...candidate,status:'failed',durability:'durable',terminalReason,error:message,waitingReason:undefined,updatedAt:Date.now()}:candidate)}));
+    return saved.executions!.find(item=>item.runId===runId)!;
+  }
   /** Resolve late: a user can queue children before their parent's durable endSeq exists. */
   private async routeQueuedExecution(workflow:M.Workflow,run:M.Execution,forceCoordinator=false):Promise<M.Execution>{
     const runtime=this.runtime(),branch=workflow.branches!.find(item=>item.id===run.branchId)!,scope=manualScope(workflow,branch);
@@ -1067,14 +1104,10 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
     });
     const candidates=required.filter(candidate=>{
       const owner=workflow.branches!.find(item=>item.id===candidate.branchId)!;
-      return required.every(item=>historyContains(workflow,item,owner,candidate.endSeq));
+      return required.every(item=>contextContains(workflow,item,owner,candidate.endSeq));
     });
     const predecessor=candidates.at(-1);
-    const reject=async(message:string):Promise<M.Execution>=>{
-      const saved=await this.write(workflow.id,item=>({...item,executions:item.executions!.map(candidate=>candidate.runId===run.runId?{...candidate,status:'failed',durability:'durable',terminalReason:'context-isolation-required',error:message,waitingReason:undefined,updatedAt:Date.now()}:candidate)}));
-      return saved.executions!.find(item=>item.runId===run.runId)!;
-    };
-    if(required.length&&!predecessor)return reject('任务依赖来自不同的独立会话，当前原生 Fork 无法合并这些历史。请先选择单一路径，或建立明确的汇总任务后再连接；本次未向 Agent 提交。');
+    const reject=(message:string)=>this.rejectQueuedExecution(workflow.id,run.runId,message);
     const allowed=new Set<string>();const visit=(id:string)=>{for(const dependency of dependencies(workflow,id))if(!allowed.has(dependency)){allowed.add(dependency);visit(dependency);}};visit(run.nodeId);
     // An explicit historical fork establishes an intentional baseline even for
     // newly created roots. The imported source is never a writable destination.
@@ -1122,6 +1155,29 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
       });
     };
     const atTail=(log:NativeSessionLog,boundary:number)=>{const latest=completedBoundary(log);return latest!==undefined&&compactionContinuationBoundary(log,latest)===boundary&&!log.events.some(event=>event.seq>boundary&&(event.type==='turn/start'||event.type==='user/message'));};
+    if(required.length&&!predecessor||run.resultInputs){
+      let inputs:Awaited<ReturnType<VisualWorkflowService['readResultInputs']>>;
+      const inputBranch=workflow.branches!.find(candidate=>candidate.id===(run.resultInputBranchId??branch.id))!;
+      try{
+        inputs=await this.readResultInputs(workflow,this.resultInputRuns(workflow,run.nodeId,inputBranch));
+        // Reject overflow before creating a Session or admitting any native work.
+        buildResultInputTask(workflow.nodes.find(node=>node.id===run.nodeId)!,inputs);
+        if(run.resultInputs&&JSON.stringify(inputs.map(input=>input.reference))!==JSON.stringify(run.resultInputs))throw new Error('上游结果与已准备的汇合输入不一致，请检查前置节点后重新运行。');
+      }catch(error){return this.rejectQueuedExecution(workflow.id,run.runId,err(error),'dependency-results-unavailable');}
+      const refs=inputs.map(input=>input.reference),inputRunIds=required.map(input=>input.runId);
+      // An independent native Session, retaining only an explicitly selected
+      // source baseline when present. Sibling task histories are never merged.
+      const target=await this.forkQueuedContext(workflow,run,scope.forkBoundarySeq===undefined?undefined:scope.sourceSessionId,scope.forkBoundarySeq,undefined,scope);
+      const log=await runtime.read(target.sessionId);
+      if(!clean(log)||log.events.some(event=>event.type==='turn/start'&&event.seq>(scope.forkBoundarySeq??-1)))return reject('已准备的汇合会话内容发生变化，本次未向 Agent 提交。请重新运行汇合节点。');
+      const saved=await this.write(workflow.id,item=>{
+        const queued=item.executions!.find(candidate=>candidate.runId===run.runId),origin=item.branches!.find(candidate=>candidate.id===inputBranch.id)!;
+        const latest=this.resultInputRuns(item,run.nodeId,origin).map(input=>input.runId);
+        if(!queued||queued.status!=='waiting'||!queueAuthorized(item,queued)||JSON.stringify(latest)!==JSON.stringify(refs.map(input=>input.runId)))fail('Task or prerequisite results changed while preparing the join; click Run again');
+        return {...item,...(branch.automatic&&item.activeBranchId===branch.id?{activeBranchId:target.id}:{}),executions:item.executions!.map(candidate=>candidate.runId===run.runId?{...candidate,branchId:target.id,sessionId:target.sessionId,inputRunIds,resultInputs:refs,resultInputBranchId:inputBranch.id,updatedAt:Date.now()}:candidate),branches:item.branches!.map(candidate=>candidate.id===target.id?{...candidate,label:`汇合 · ${taskCaption(item.nodes.find(node=>node.id===run.nodeId)!)}`.slice(0,160),nodeIds:[...new Set([...candidate.nodeIds,...refs.map(input=>item.executions!.find(run=>run.runId===input.runId)!.nodeId),run.nodeId])]}:candidate)};
+      });
+      return saved.executions!.find(candidate=>candidate.runId===run.runId)!;
+    }
     let target:M.Branch|undefined;
     if(predecessor){
       const owner=workflow.branches!.find(item=>item.id===predecessor.branchId)!;
@@ -1212,6 +1268,14 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
         if(!selected||this.stopped)return;
         let run=await this.routeQueuedExecution(current,selected,delegated);current=this.workflow(workflowId);
         if(run.status!=='waiting'){continue;}if(this.stopped)return;
+        let resultTask:string|undefined;
+        if(run.resultInputs){
+          try{
+            const inputs=await this.readResultInputs(current,run.resultInputs.map(input=>current.executions!.find(candidate=>referencesResult(input,candidate))??fail('An upstream result is no longer available')));
+            if(JSON.stringify(inputs.map(input=>input.reference))!==JSON.stringify(run.resultInputs))throw new Error('上游原生结果发生变化，本次未提交。请检查后重新运行汇合节点。');
+            resultTask=buildResultInputTask(current.nodes.find(node=>node.id===run.nodeId)!,inputs);
+          }catch(error){await this.rejectQueuedExecution(workflowId,run.runId,err(error),'dependency-results-unavailable');continue;}
+        }
         if(delegated){run=await this.prepareSubagent(current,run);current=this.workflow(workflowId);}
         const branch=current.branches!.find(item=>item.id===run.branchId)!;
         const operation=current.operations!.find(item=>item.kind==='run'&&item.runId===run.runId);if(!operation)fail('Queued execution has no durable operation identity');
@@ -1221,6 +1285,11 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
           const queued=item.executions!.find(candidate=>candidate.runId===run.runId);
           const busy=this.branchBusy({...item,executions:run.subagent?item.executions!.filter(candidate=>candidate.runId!==run.runId):item.executions},branch);
           if(!queued||queued.status!=='waiting'&&!(run.subagent&&queued.status==='ready')||!queueAuthorized(item,queued)||!prerequisitesComplete(item,queued.nodeId,branch)||busy)return item;
+          if(run.resultInputs){
+            const origin=item.branches!.find(candidate=>candidate.id===(run.resultInputBranchId??selected!.branchId))!;
+            const latest=this.resultInputRuns(item,run.nodeId,origin).map(input=>input.runId);
+            if(JSON.stringify(latest)!==JSON.stringify(run.resultInputs.map(input=>input.runId)))return item;
+          }
           admitted=true;
           const inputRunIds=contextCheck(item,branch).inputs(queued.nodeId).map(input=>input.runId);
           return {...item,executions:item.executions!.map(candidate=>candidate.runId===run.runId?{...candidate,status:'ready',waitingReason:undefined,inputRunIds,startSeq:((run.subagent?completedBoundary(log):log.events.at(-1)?.seq)??-1)+1,updatedAt:Date.now()}:candidate),operations:item.operations!.map(candidate=>candidate.id===operation.id?{...candidate,status:'pending',sourceSessionId:run.subagent?.parentSessionId??run.sessionId,...(run.subagent?{childSessionId:run.sessionId}:{})}:candidate)};
@@ -1228,7 +1297,7 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
         if(!admitted||this.stopped)return;
         const node=current.nodes.find(item=>item.id===run.nodeId)!;
         try{
-          const task={text:`Task: ${node.title}\n\n${node.instruction}`,files:node.attachments?.map(attachment=>attachment.file),model:run.resolvedModel};
+          const task={text:resultTask??`Task: ${node.title}\n\n${node.instruction}`,files:node.attachments?.map(attachment=>attachment.file),model:run.resolvedModel};
           if(run.subagent){
             const receipt=await this.runtime().startSubagent!({...task,parentSessionId:run.subagent.parentSessionId,childSessionId:run.sessionId,label:taskCaption(node),accessMode:run.resolvedAccessMode});
             await this.write(workflowId,item=>({...item,executions:item.executions!.map(candidate=>candidate.runId===run.runId?{...candidate,subagent:{...candidate.subagent!,messageId:receipt.messageId}}:candidate)}));
@@ -1283,7 +1352,7 @@ const repeated=current.operations!.find(item=>item.id===args.operationId);if(rep
     if(child.sessionId===source||workflow.branches!.some(branch=>branch.sessionId===child.sessionId))fail('Native child Session identity is not independent');
     const parent=workflow.branches!.find(branch=>branch.sessionId===source);
     const shared=run?workflow.nodes.filter(node=>node.kind==='session'||workflow.executions!.some(execution=>execution.nodeId===node.id&&execution.status==='completed'&&execution.endSeq!==undefined&&(
-      !!parent&&historyContains(workflow,execution,parent,boundary)
+      !!parent&&contextContains(workflow,execution,parent,boundary)
     ))).map(node=>node.id):workflow.nodes.filter(node=>node.kind==='session').map(node=>node.id);
     const displayLabel=run&&!automatic?branchCaption(workflow.nodes.find(node=>node.id===run.nodeId),label).slice(0,160):label;
     const branch:M.Branch={id:uid('branch'),label:displayLabel,sessionId:child.sessionId,sourceSessionId:source,parentBranchId:parent?.id??scope?.id,forkFromNodeId:run?.nodeId,forkBoundarySeq:boundary,nodeIds:shared,createdAt:Date.now(),...(automatic?{automatic:true}:{})};

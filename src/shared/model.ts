@@ -3,7 +3,7 @@ import { layoutDependencyNodes } from './layout.ts';
 export interface Position { x: number; y: number }
 export interface NodeSize { width: number; height: number }
 export interface Viewport extends Position { zoom: number }
-export const WORKFLOW_PLUGIN_VERSION='0.17.3';
+export const WORKFLOW_PLUGIN_VERSION='0.18.0';
 export const WORKFLOW_API_VERSION=3;
 /** Native model identity only; provider configuration and credentials stay in DSH. */
 export interface WorkflowModelIdentity { provider: string; model: string; /** Provider-owned native reasoning effort; omitted follows the model default. */ reasoningEffort?: string }
@@ -57,6 +57,10 @@ export interface Branch {
   automatic?: boolean;
 }
 export interface TurnRef { turn: number; startSeq: number; endSeq?: number; reason?: string }
+/** Complete visible results read from native events; text remains in Session persistence. */
+export interface ExecutionResultInput {
+  runId:string; sessionId:string; requestId:string; startSeq:number; endSeq:number; sha256:string;
+}
 export interface Execution {
   runId: string; nodeId: string; nodeRevision: number; branchId: string; sessionId: string; requestId: string;
   status: WorkflowStatus; startSeq?: number; endSeq?: number; turns: TurnRef[];
@@ -71,6 +75,10 @@ export interface Execution {
   subagent?: { parentSessionId:string; provider:'fork'; messageId?:string };
   /** Exact direct task inputs, resolved immediately before native admission. */
   inputRunIds?: string[];
+  /** Explicit result transfer for a DAG join, distinct from physical Fork inheritance. */
+  resultInputs?:ExecutionResultInput[];
+  /** Original view used to revalidate upstream freshness after a prepared join restarts. */
+  resultInputBranchId?:string;
   /** Resolved at explicit Run admission and never changed by later selection edits. */
   resolvedModel?: WorkflowModelIdentity;
   resolvedAccessMode?:string;

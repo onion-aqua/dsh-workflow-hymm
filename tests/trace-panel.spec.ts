@@ -37,6 +37,45 @@ function stepButton(title: string): HTMLButtonElement {
 }
 
 describe('TracePanel presentation without fabricated product executions', () => {
+  it('shows compact result provenance separately from native steps and opens the exact source Session',async()=>{
+    const onOpenSession=vi.fn();
+    const inputs=[
+      {runId:'source-weather',sessionId:'weather-session',requestId:'weather-request',startSeq:12,endSeq:29,sha256:'a'.repeat(64)},
+      {runId:'source-description',sessionId:'description-session',requestId:'description-request',startSeq:13,endSeq:46,sha256:'b'.repeat(64)},
+      {runId:'source-common',sessionId:'common-session',requestId:'common-request',startSeq:1,endSeq:10,sha256:'c'.repeat(64)},
+    ];
+    const execution={runId:'join-result',nodeId:'join-node',nodeRevision:1,branchId:'join-branch',sessionId:'join-session',status:'completed',createdAt:1,updatedAt:2,resultInputs:inputs};
+    await render({runId:execution.runId,executions:[execution],resultInputLabels:{'source-weather':'#2 · 查询天气 · v1','source-description':'#3 · 撰写简介 · v1'},steps:[fixtureSteps[0]!],onOpenSession});
+    const provenance=container.querySelector<HTMLDetailsElement>('[data-testid="trace-result-inputs"]')!;
+    expect(provenance.open).toBe(false);
+    expect(provenance.querySelector('summary')?.textContent).toBe('已汇合 3 个上游执行结果');
+    expect(provenance.textContent).toContain('原始会话保持独立');
+    expect(provenance.textContent).toContain('#2 · 查询天气 · v1');
+    expect(provenance.textContent).toContain('Session · weather-session');
+    expect(provenance.textContent).toContain('事件序号 · 12–29');
+    expect(provenance.textContent).toContain('source-common');
+    expect(container.querySelector('.wf-trace-count')?.textContent).toBe('1');
+    expect(container.querySelectorAll('.wf-trace-step')).toHaveLength(1);
+    expect(provenance.querySelector('pre')).toBeNull();
+    await act(async()=>provenance.querySelector('summary')!.click());expect(provenance.open).toBe(true);
+    await act(async()=>provenance.querySelector<HTMLButtonElement>('[data-testid="trace-result-input-source-description"] button')!.click());
+    expect(onOpenSession).toHaveBeenCalledExactlyOnceWith('description-session');
+    await render({runId:'ordinary',executions:[{...execution,runId:'ordinary',resultInputs:undefined}],steps:[fixtureSteps[0]!]});
+    expect(container.querySelector('[data-testid="trace-result-inputs"]')).toBeNull();
+  });
+
+  it('resets expanded provenance when selecting another execution and keeps the selected source identities',async()=>{
+    const makeExecution=(runId:string,source:string)=>({runId,nodeId:'join-node',nodeRevision:1,branchId:'branch',sessionId:`join-${runId}`,status:'completed',createdAt:1,updatedAt:2,resultInputs:[{runId:`input-${source}`,sessionId:source,requestId:`request-${source}`,startSeq:1,endSeq:10,sha256:'a'.repeat(64)}]});
+    const executions=[makeExecution('old-join','old-source'),makeExecution('new-join','new-source')];
+    await render({runId:'old-join',executions});
+    const old=container.querySelector<HTMLDetailsElement>('[data-testid="trace-result-inputs"]')!;
+    await act(async()=>old.querySelector('summary')!.click());expect(old.open).toBe(true);
+    await render({runId:'new-join',executions});
+    const next=container.querySelector<HTMLDetailsElement>('[data-testid="trace-result-inputs"]')!;
+    expect(next.open).toBe(false);expect(next.textContent).toContain('new-source');expect(next.textContent).not.toContain('old-source');
+    expect(next.querySelector('button')).toBeNull();
+  });
+
   it('renders truthful empty, loading and read-failure states', async () => {
     await render();
     expect(container.querySelector('[data-testid="trace-empty"]')).not.toBeNull();

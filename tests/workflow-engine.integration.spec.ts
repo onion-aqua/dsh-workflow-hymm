@@ -64,6 +64,33 @@ async function twoTasks(service:Service){
   const result=await service.save({workflow:{...workflow,nodes:[...workflow.nodes,{id:'downstream',title:'Downstream',instruction:'Use the latest completed task',source:'user',status:'draft',revision:1,position:{x:600,y:100}},{id:'unselected',title:'Unselected',instruction:'Do not run automatically',source:'user',status:'draft',revision:1,position:{x:1000,y:100}}],edges:[{id:'requires',source:'task',target:'downstream',type:'dependency'}]},expectedRevision:workflow.revision});
   if(!result.ok)throw new Error('save conflict');return result.workflow;
 }
+/** The screenshot's diamond: two isolated sibling paths feed one real join. */
+async function diamondTasks(service:Service,source=true){
+  const workflow=await oneTask(service,source);
+  const nodes=['left','right','joined','after'].map((id,index)=>({id,title:id,instruction:`Execute ${id} using its prerequisite results`,source:'user' as const,status:'draft' as const,revision:1,position:{x:600+index*300,y:index%2*250}}));
+  const pairs=[['task','left'],['task','right'],['left','joined'],['right','joined'],['joined','after']];
+  const saved=await service.save({workflow:{...workflow,nodes:[...workflow.nodes,...nodes],edges:pairs.map(([source,target],index)=>({id:`diamond-${index}`,source:source!,target:target!,type:'dependency' as const}))},expectedRevision:workflow.revision});
+  if(!saved.ok)throw new Error('save conflict');return saved.workflow;
+}
+function installDiamondResults(native:NativeFixture){
+  const output:Record<string,string>={Task:'SHARED_ANCESTOR_RESULT',left:`LEFT_RESULT_BEGIN ${'L'.repeat(8000)} FULL_LEFT_RESULT_TAIL`,right:'RIGHT_PUBLIC_RESULT',joined:'JOIN_PUBLIC_RESULT',after:'AFTER_PUBLIC_RESULT',nested:'NESTED_PUBLIC_RESULT'};
+  const submit=native.submit.bind(native);
+  native.submit=async request=>{
+    await submit(request);
+    const title=/^Task: ([^\n]+)/.exec(request.text)?.[1],text=title?output[title]:undefined;
+    if(text===undefined)return;
+    const event=native.logs.get(request.sessionId)!.events.findLast(event=>event.type==='assistant/message')!;
+    event.data.message={content:[{type:'reasoning',text:'PRIVATE_REASONING_MUST_NOT_ENTER_JOIN'},{type:'text',text}]};
+  };
+  return output;
+}
+function resultRecords(text:string):Array<{source:{runId:string;nodeId:string};result:string}>{
+  const start=text.lastIndexOf('\n[');expect(start).toBeGreaterThan(0);return JSON.parse(text.slice(start+1));
+}
+async function runDiamondPrerequisites(service:Service,workflowId:string){
+  for(const nodeId of ['task','left','right'])await service.run({workflowId,nodeId,operationId:`diamond-prerequisite-${nodeId}`});
+  return (await service.get({id:workflowId})).workflow!;
+}
 const legacyOmittedDependencyError='Invalid workflow data: tasks.0.dependsOn: Invalid input: expected array, received undefined';
 /** Seed historical parser metadata only, in this test's private storage folder. */
 async function seedLegacyPlanFailure(root:string,workflowId:string,planId:string,options:{preserveDecision?:boolean;unconfirmed?:boolean}={}){
@@ -910,6 +937,103 @@ describe('native-backed workflow aggregate coordination',()=>{
     const requestIds=log.events.filter(event=>event.type==='user/message').map(event=>(event.data.source as {rpcId?:string}|undefined)?.rpcId);
     expect(requestIds).toContain(commonRun.requestId);expect(requestIds).toContain(run.requestId);expect(requestIds).not.toContain(firstRun.requestId);expect(requestIds).not.toContain(siblingRun.requestId);
     expect(JSON.stringify(log)).not.toContain('Do not run automatically');expect(JSON.stringify(await native.read(firstRun.sessionId))).toBe(firstBytes);expect(JSON.stringify(await native.read(siblingRun.sessionId))).toBe(siblingBytes);expect(native.prompts).toHaveLength(4);
+  });
+  it('joins isolated sibling results without truncation or reasoning, continues and preserves historical inputs while current reruns become stale',async()=>{
+    const {service,native,root}=await open(),outputs=installDiamondResults(native),workflow=await diamondTasks(service);
+    const ready=await runDiamondPrerequisites(service,workflow.id),overview=ready.activeBranchId!;
+    const upstream=ready.executions!,left=upstream.find(run=>run.nodeId==='left')!,right=upstream.find(run=>run.nodeId==='right')!;
+    expect(left.sessionId).not.toBe(right.sessionId);expect(left.summary).not.toContain('FULL_LEFT_RESULT_TAIL');
+    const before=new Map(await Promise.all(['source',...upstream.map(run=>run.sessionId)].map(async id=>[id,JSON.stringify(await native.read(id))] as const)));
+    const result=await service.run({workflowId:workflow.id,nodeId:'joined',operationId:'diamond-join'}),joined=result.workflow.executions!.find(run=>run.runId===result.runId)!;
+    expect(joined).toMatchObject({status:'completed',durability:'durable',inputRunIds:[left.runId,right.runId]});
+    expect(new Set(joined.resultInputs!.map(input=>input.runId))).toEqual(new Set(upstream.map(run=>run.runId)));
+    expect(upstream.some(run=>run.sessionId===joined.sessionId)).toBe(false);
+    const prompt=native.prompts.find(prompt=>prompt.requestId===joined.requestId)!,records=resultRecords(prompt.text);
+    expect(records.map(record=>record.source.nodeId)).toEqual(['task','left','right']);
+    expect(records.find(record=>record.source.nodeId==='left')!.result).toBe(outputs.left);
+    expect(records.find(record=>record.source.nodeId==='right')!.result).toBe(outputs.right);
+    expect(prompt.text.split(outputs.Task!).length-1).toBe(1);
+    expect(prompt.text).not.toContain('PRIVATE_REASONING_MUST_NOT_ENTER_JOIN');expect(prompt.text).not.toContain('Recorded command output');
+    for(const [id,bytes] of before)expect(JSON.stringify(await native.read(id))).toBe(bytes);
+    expect(await readFile(join(root,'visual_workflow.json'),'utf8')).not.toContain('FULL_LEFT_RESULT_TAIL');
+    const afterResult=await service.run({workflowId:workflow.id,nodeId:'after',operationId:'diamond-continue'}),after=afterResult.workflow.executions!.find(run=>run.runId===afterResult.runId)!;
+    expect(after).toMatchObject({status:'completed',sessionId:joined.sessionId,inputRunIds:[joined.runId]});expect(after.resultInputs).toBeUndefined();
+    const history=await service.fork({workflowId:workflow.id,runId:joined.runId,label:'Historical join',operationId:'diamond-history'}),historical=history.workflow.branches!.find(branch=>branch.id===history.branchId)!;
+    expect(historical.nodeIds).toEqual(expect.arrayContaining(['task','left','right','joined']));
+    const historicLog=await native.read(historical.sessionId);expect(historicLog.events.some(event=>event.type==='user/message'&&(event.data.source as {rpcId?:string}|undefined)?.rpcId===joined.requestId)).toBe(true);
+    expect(JSON.stringify(historicLog)).toContain('FULL_LEFT_RESULT_TAIL');
+    const rerun=await service.run({workflowId:workflow.id,nodeId:'left',branchId:overview,operationId:'diamond-left-new-attempt'}),newLeft=rerun.workflow.executions!.find(run=>run.runId===rerun.runId)!;
+    expect(newLeft.status).toBe('completed');expect(newLeft.runId).not.toBe(left.runId);
+    const selected=await service.save({workflow:{...rerun.workflow,activeBranchId:overview},expectedRevision:rerun.workflow.revision});if(!selected.ok)throw new Error('save conflict');
+    expect(selected.workflow.nodes.find(node=>node.id==='joined')!.resultStale).toBe(true);expect(selected.workflow.nodes.find(node=>node.id==='after')!.resultStale).toBe(true);
+    const historicalContinuation=await service.run({workflowId:workflow.id,nodeId:'after',branchId:historical.id,operationId:'diamond-historical-after-rerun'});
+    expect(historicalContinuation.workflow.executions!.find(run=>run.runId===historicalContinuation.runId)!.status).toBe('completed');
+    expect(JSON.stringify(await native.read(left.sessionId))).toBe(before.get(left.sessionId));expect(JSON.stringify(await native.read(right.sessionId))).toBe(before.get(right.sessionId));expect(JSON.stringify(await native.read('source'))).toBe(before.get('source'));
+  });
+  it('supports nested joins with unique exact upstream result identities instead of duplicated shared histories',async()=>{
+    const {service,native}=await open();installDiamondResults(native);const workflow=await diamondTasks(service);
+    await runDiamondPrerequisites(service,workflow.id);await service.run({workflowId:workflow.id,nodeId:'joined',operationId:'nested-first-join'});
+    const current=(await service.get({id:workflow.id})).workflow!;
+    const saved=await service.save({workflow:{...current,nodes:[...current.nodes,...['other','nested'].map((id,index)=>({id,title:id,instruction:`Execute ${id}`,source:'user' as const,status:'draft' as const,revision:1,position:{x:1800,y:index*300}}))],edges:[...current.edges,{id:'nested-joined',source:'joined',target:'nested',type:'dependency'},{id:'nested-other',source:'other',target:'nested',type:'dependency'}]},expectedRevision:current.revision});if(!saved.ok)throw new Error('save conflict');
+    await service.run({workflowId:workflow.id,nodeId:'other',operationId:'nested-other'});
+    const result=await service.run({workflowId:workflow.id,nodeId:'nested',operationId:'nested-second-join'}),run=result.workflow.executions!.find(run=>run.runId===result.runId)!;
+    expect(run.status).toBe('completed');expect(run.resultInputs).toHaveLength(5);
+    expect(new Set(run.resultInputs!.map(input=>input.runId)).size).toBe(5);
+    const records=resultRecords(native.prompts.find(prompt=>prompt.requestId===run.requestId)!.text);
+    expect(new Set(records.map(record=>record.source.nodeId))).toEqual(new Set(['task','left','right','joined','other']));
+    expect(records.filter(record=>record.source.nodeId==='task')).toHaveLength(1);expect(result.workflow.nodes.find(node=>node.id==='nested')!.resultStale).toBeUndefined();
+  });
+  it('does not recreate or submit a join after losing its native empty Session creation response and restarting',async()=>{
+    const first=await open();installDiamondResults(first.native);const workflow=await diamondTasks(first.service,false);await runDiamondPrerequisites(first.service,workflow.id);
+    const native=first.native,create=native.create.bind(native),promptCount=native.prompts.length,sessionCount=native.logs.size;let creates=0;
+    native.create=async options=>{creates++;await create(options);throw new Error('Join Session exists but create response was lost');};
+    const args={workflowId:workflow.id,nodeId:'joined',operationId:'join-create-response-lost'};
+    await first.service.run(args).catch(error=>expect(String(error)).toContain('response was lost'));
+    await vi.waitFor(async()=>expect((await first.service.get({id:workflow.id})).workflow!.executions!.find(run=>run.nodeId==='joined')).toMatchObject({status:'unknown',durability:'needs-reconcile'}));
+    const uncertain=(await first.service.get({id:workflow.id})).workflow!,run=uncertain.executions!.find(run=>run.nodeId==='joined')!;
+    expect(uncertain.operations!.find(operation=>operation.id===`route-${run.runId}`)).toMatchObject({status:'needs-reconcile'});expect(creates).toBe(1);expect(native.logs.size).toBe(sessionCount+1);expect(native.prompts).toHaveLength(promptCount);
+    await first.ctx.fiber.dispose();native.create=create;const second=await open(first.root,native);
+    await (Reflect.get(second.service,'recover') as ()=>Promise<void>).call(second.service);
+    await (Reflect.get(second.service,'advancePolicies') as (id:string)=>Promise<void>).call(second.service,workflow.id);
+    expect((await second.service.run(args)).runId).toBe(run.runId);expect(native.logs.size).toBe(sessionCount+1);expect(native.prompts).toHaveLength(promptCount);
+    expect((await second.service.get({id:workflow.id})).workflow!.executions!.find(item=>item.runId===run.runId)).toMatchObject({status:'unknown',durability:'needs-reconcile'});
+  });
+  it('rejects foreign native chat added to a durable prepared join instead of inheriting it after restart',async()=>{
+    const first=await open();installDiamondResults(first.native);const workflow=await diamondTasks(first.service,false);await runDiamondPrerequisites(first.service,workflow.id);
+    type Branch=NonNullable<Workflow['branches']>[number];let child:Branch|undefined;
+    const prepare=Reflect.get(first.service,'forkQueuedContext') as (...args:unknown[])=>Promise<Branch>;
+    Reflect.set(first.service,'forkQueuedContext',async(...args:unknown[])=>{child=await prepare.apply(first.service,args);Reflect.set(first.service,'stopped',true);throw new Error('Simulated join crash before binding');});
+    await first.service.run({workflowId:workflow.id,nodeId:'joined',operationId:'join-prepared-before-crash'}).catch(error=>expect(String(error)).toContain('Simulated join crash'));
+    const prepared=(await first.service.get({id:workflow.id})).workflow!,waiting=prepared.executions!.find(run=>run.nodeId==='joined')!;
+    expect(waiting.status).toBe('waiting');expect(child).toBeDefined();expect(prepared.operations!.find(operation=>operation.id===`route-${waiting.runId}`)).toMatchObject({status:'completed',childSessionId:child!.sessionId});
+    await first.native.submit({sessionId:child!.sessionId,requestId:'foreign-join-chat',text:'FOREIGN_JOIN_CONTEXT'});
+    const bytes=JSON.stringify(await first.native.read(child!.sessionId)),prompts=first.native.prompts.length,sessions=first.native.logs.size;
+    await first.ctx.fiber.dispose();const second=await open(first.root,first.native);
+    await (Reflect.get(second.service,'recover') as ()=>Promise<void>).call(second.service);
+    await (Reflect.get(second.service,'advancePolicies') as (id:string)=>Promise<void>).call(second.service,workflow.id);
+    const rejected=(await second.service.get({id:workflow.id})).workflow!.executions!.find(run=>run.runId===waiting.runId)!;
+    expect(rejected).toMatchObject({status:'failed',durability:'durable',terminalReason:'context-isolation-required'});expect(rejected.error).toContain('汇合会话内容发生变化');expect(rejected.startSeq).toBeUndefined();
+    expect(first.native.prompts).toHaveLength(prompts);expect(first.native.logs.size).toBe(sessions);expect(JSON.stringify(await first.native.read(child!.sessionId))).toBe(bytes);
+  });
+  it('revalidates the original overview after a prepared join restarts and refuses its obsolete sibling result snapshot',async()=>{
+    const first=await open();installDiamondResults(first.native);const workflow=await diamondTasks(first.service,false),ready=await runDiamondPrerequisites(first.service,workflow.id),overview=ready.activeBranchId!;
+    const route=Reflect.get(first.service,'routeQueuedExecution') as (...args:unknown[])=>Promise<NonNullable<Workflow['executions']>[number]>;
+    Reflect.set(first.service,'routeQueuedExecution',async(...args:unknown[])=>{const run=await route.apply(first.service,args);if(run.nodeId==='joined'){Reflect.set(first.service,'stopped',true);}return run;});
+    const requested=await first.service.run({workflowId:workflow.id,nodeId:'joined',operationId:'join-rebound-before-crash'}),prepared=requested.workflow.executions!.find(run=>run.runId===requested.runId)!;
+    expect(prepared).toMatchObject({status:'waiting',resultInputBranchId:overview});expect(prepared.resultInputs).toHaveLength(3);expect(prepared.branchId).not.toBe(overview);expect(prepared.startSeq).toBeUndefined();
+    expect(first.native.prompts).toHaveLength(3);const preparedSession=JSON.stringify(await first.native.read(prepared.sessionId));
+    await first.ctx.fiber.dispose();
+    const native=first.native;native.isRunning=id=>id===prepared.sessionId;
+    const second=await open(first.root,native);await (Reflect.get(second.service,'recover') as ()=>Promise<void>).call(second.service);
+    // Hold only this prepared Session busy while a real new sibling execution
+    // completes in the overview; no execution metadata is manufactured.
+    const rerun=await second.service.run({workflowId:workflow.id,nodeId:'left',branchId:overview,operationId:'join-restart-new-left'}),left=rerun.workflow.executions!.find(run=>run.runId===rerun.runId)!;
+    expect(left.status).toBe('completed');expect(prepared.resultInputs!.some(input=>input.runId===left.runId)).toBe(false);
+    const prompts=native.prompts.length,sessions=native.logs.size;native.isRunning=()=>false;
+    await (Reflect.get(second.service,'advancePolicies') as (id:string)=>Promise<void>).call(second.service,workflow.id);
+    const rejected=(await second.service.get({id:workflow.id})).workflow!.executions!.find(run=>run.runId===prepared.runId)!;
+    expect(rejected).toMatchObject({status:'failed',durability:'durable',terminalReason:'dependency-results-unavailable'});expect(rejected.error).toContain('已准备的汇合输入不一致');expect(rejected.startSeq).toBeUndefined();
+    expect(native.prompts).toHaveLength(prompts);expect(native.logs.size).toBe(sessions);expect(JSON.stringify(await native.read(prepared.sessionId))).toBe(preparedSession);
   });
   it('restores an uncertain pre-submit crash as unknown without pretending that native execution started',async()=>{
     const first=await open();const workflow=await oneTask(first.service,true);let reached!:()=>void;const entered=new Promise<void>(resolve=>{reached=resolve;});

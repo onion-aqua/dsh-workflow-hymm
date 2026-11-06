@@ -51,6 +51,7 @@ class ExactReadQuery extends SessionQueryEngine{
 }
 class ControlledModel extends LlmAdapter{
   readonly calls:GenerateOptions[]=[];
+  readonly taskAnswers=new Map<string,string>();
   async listModels(provider='fixture'){return ['default','model-a','model-b'].map(id=>({provider,id,name:`Controlled ${id}`}));}
   async *stream(options:GenerateOptions):AsyncIterable<StreamChunk>{
     options.signal?.throwIfAborted();this.calls.push(options);
@@ -62,7 +63,8 @@ class ControlledModel extends LlmAdapter{
       const block={type:'tool-call' as const,id:ToolCallId(`native-child-read-${this.calls.length}`),name:'read',arguments:JSON.stringify({file_path:JSON.parse(path)})};
       yield {type:'block-start',index:0,blockType:'tool-call'};yield {type:'block-end',index:0,block};yield {type:'finish',reason:{kind:'tool-calls'}};return;
     }
-    const text=`Native child answer: ${prompt}`;
+    const title=/^Task: ([^\n]+)/.exec(prompt)?.[1];
+    const text=this.taskAnswers.get(title??'')??`Native child answer: ${prompt}`;
     yield {type:'block-start',index:0,blockType:'text'};yield {type:'text-delta',index:0,text};yield {type:'block-end',index:0,block:{type:'text',text}};yield {type:'finish',reason:{kind:'stop'}};
   }
 }
@@ -204,5 +206,42 @@ describe('released rc.3 native subagent adapter',()=>{
     const log=await runtime.read(b.sessionId);expect(log.header.parentSession).toBe(a.sessionId);expect((log.header as unknown as {origin?:string}).origin).toBeUndefined();expect(log.inheritedEventCount).toBe(a.endSeq!+1);
     for(const run of [a,b]){const trace=(await service.trace({workflowId:workflow.id,runId:run.runId})).trace;expect(trace.status).toBe('completed');expect(trace.steps.length).toBeGreaterThan(0);expect(trace.error).toBeUndefined();}
     const ordinary=model.calls.findLast(call=>JSON.stringify(call.messages).includes('SERVICE_ORDINARY_B_ONLY'))!;expect(ordinary.model).toBe('model-a');expect(JSON.stringify(ordinary.messages)).toContain('SERVICE_CHILD_A_ONLY');expect(await physical(directory,a.sessionId)).toEqual(childBytes);expect(await physical(directory,source)).toEqual(sourceBytes);
+  });
+  for(const mode of ['off','on'] as const)it(`joins a real native diamond and continues it with subagents ${mode} while preserving both sibling Sessions`,async()=>{
+    const {ctx,runtime,directory,model}=await open(),{source}=await sourceAndCoordinators(runtime,directory,0);
+    const sourceBytes=await physical(directory,source),service=await mountWorkflow(ctx,directory),imported=(await service.importSession({sessionId:source})).workflow;
+    const titles=Object.fromEntries(['a','b','c','d','e'].map(id=>[id,`NATIVE_JOIN_${mode}_${id.toUpperCase()}`]));
+    const leftText=`LEFT_PUBLIC_RESULT_BEGIN_${mode} ${'L'.repeat(8000)} LEFT_PUBLIC_RESULT_TAIL_${mode}`;
+    const results={a:`SHARED_PUBLIC_RESULT_${mode}`,b:leftText,c:`RIGHT_PUBLIC_RESULT_${mode}`,d:`JOINED_PUBLIC_RESULT_${mode}`,e:`CONTINUED_PUBLIC_RESULT_${mode}`};
+    for(const id of ['a','b','c','d','e'] as const)model.taskAnswers.set(titles[id]!,results[id]);
+    const pairs=[['a','b'],['a','c'],['b','d'],['c','d'],['d','e']];
+    const workflow=await editWorkflow(service,imported.id,current=>({...current,settings:{generation:'manual',execution:'manual',subagents:mode,model:{provider:'fixture',model:'model-a'}},nodes:[...current.nodes,...['a','b','c','d','e'].map((id,index)=>({id,title:titles[id]!,instruction:`Execute the ${id} task using only its declared prerequisite results.`,source:'user' as const,status:'draft' as const,revision:1,position:{x:400+index*300,y:index%2*250}}))],edges:pairs.map(([from,to],index)=>({id:`native-join-edge-${index}`,source:from!,target:to!,type:'dependency' as const}))}));
+    const completed=async(nodeId:string)=>{
+      const requested=await service.run({workflowId:workflow.id,nodeId,operationId:`native-join-${mode}-${nodeId}`});
+      await vi.waitFor(async()=>expect((await service.get({id:workflow.id})).workflow!.executions!.find(run=>run.runId===requested.runId)).toMatchObject({status:'completed',durability:'durable'}),{timeout:8000,interval:20});
+      return (await service.get({id:workflow.id})).workflow!.executions!.find(run=>run.runId===requested.runId)!;
+    };
+    const a=await completed('a'),b=await completed('b'),bBytes=await physical(directory,b.sessionId),c=await completed('c'),cBytes=await physical(directory,c.sessionId);
+    expect(b.sessionId).not.toBe(c.sessionId);expect(b.sessionId).not.toBe(a.sessionId);expect(c.sessionId).not.toBe(a.sessionId);
+    expect(await physical(directory,b.sessionId)).toEqual(bBytes);
+    const d=await completed('d');expect([source,a.sessionId,b.sessionId,c.sessionId]).not.toContain(d.sessionId);
+    expect(new Set(d.inputRunIds)).toEqual(new Set([b.runId,c.runId]));
+    expect(d.resultInputs?.map(input=>input.runId)).toEqual([a.runId,b.runId,c.runId]);
+    expect(d.resultInputBranchId).toBeTruthy();
+    const userText=(call:GenerateOptions)=>call.messages.findLast(message=>message.role==='user'&&'source' in message&&message.source?.kind==='user')?.content.filter(block=>block.type==='text').map(block=>block.text).join('')??'';
+    const joinCall=model.calls.findLast(call=>userText(call).startsWith(`Task: ${titles.d}\n`))!;
+    expect(joinCall).toBeDefined();const prompt=userText(joinCall),start=prompt.lastIndexOf('\n[');
+    expect(start).toBeGreaterThan(0);
+    const records=JSON.parse(prompt.slice(start+1)) as Array<{source:{runId:string;nodeId:string};result:string}>;
+    expect(records.map(input=>input.source.nodeId)).toEqual(['a','b','c']);
+    expect(records.find(input=>input.source.nodeId==='b')?.result).toBe(leftText);expect(records.find(input=>input.source.nodeId==='c')?.result).toBe(results.c);
+    const e=await completed('e'),done=(await service.get({id:workflow.id})).workflow!;
+    expect(done.nodes.filter(node=>['a','b','c','d','e'].includes(node.id)).every(node=>node.status==='completed'&&!node.resultStale)).toBe(true);
+    const afterCall=model.calls.findLast(call=>userText(call).startsWith(`Task: ${titles.e}\n`))!;
+    expect(afterCall).toBeDefined();const afterContext=JSON.stringify(afterCall.messages);expect(afterContext).toContain(`LEFT_PUBLIC_RESULT_TAIL_${mode}`);expect(afterContext).toContain(results.c);expect(afterContext).toContain(results.d);
+    for(const run of [d,e]){expect(Boolean(run.subagent)).toBe(mode==='on');const trace=(await service.trace({workflowId:workflow.id,runId:run.runId})).trace;expect(trace.status).toBe('completed');expect(trace.error).toBeUndefined();}
+    expect(await physical(directory,b.sessionId)).toEqual(bBytes);expect(await physical(directory,c.sessionId)).toEqual(cBytes);expect(await physical(directory,source)).toEqual(sourceBytes);
+    const metadata=await readFile(join(directory,'workflow-storage','visual_workflow.json'),'utf8');expect(metadata).not.toContain('Workflow dependency results:');expect(metadata).not.toContain(leftText);expect(metadata).not.toContain(`LEFT_PUBLIC_RESULT_TAIL_${mode}`);
+    for(const input of d.resultInputs!)expect(Object.keys(input).sort()).toEqual(['endSeq','requestId','runId','sessionId','sha256','startSeq']);
   });
 });

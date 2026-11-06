@@ -130,8 +130,34 @@ describe('native subagent scheduler admission and isolation',()=>{
     const waiting=await service.run({workflowId:workflow.id,nodeId:'c',operationId:'stale-waiting-c'});expect(taskFor(native,'c')).toBeUndefined();expect(waiting.workflow.executions!.find(run=>run.runId===waiting.runId)).toMatchObject({status:'waiting',waitingReason:'stale_prerequisites'});
     const refreshed=await service.run({workflowId:workflow.id,nodeId:'b',operationId:'stale-refresh-b'});const b2=native.started.findLast(task=>task.text==='Task: b\n\nSCHEDULER_TOKEN_b')!;await finish(service,native,b2.sessionId);await settled(service,workflow.id,refreshed.runId!);await vi.waitFor(()=>expect(taskFor(native,'c')).toBeDefined());const c=taskFor(native,'c')!;expect(JSON.stringify(c.context)).toContain(a2.messageId);expect(JSON.stringify(c.context)).toContain(b2.messageId);expect(JSON.stringify(c.context)).not.toContain(taskFor(native,'a')!.messageId);expect(JSON.stringify(c.context)).not.toContain(taskFor(native,'b')!.messageId);await finish(service,native,c.sessionId);await settled(service,workflow.id,waiting.runId!);
   });
-  it('retains the existing cross-Session merge rejection instead of silently combining parallel children',async()=>{
-    const {service,native}=await open(),workflow=await graph(service,'on',['a','b','c','d'],[['a','b'],['a','c'],['b','d'],['c','d']]);const requested=await batch(service,workflow.id,['d','c','b','a'],'merge-parallel-children');await vi.waitFor(()=>expect(taskFor(native,'a')).toBeDefined());expect(taskFor(native,'b')).toBeUndefined();expect(taskFor(native,'c')).toBeUndefined();await finish(service,native,taskFor(native,'a')!.sessionId);await vi.waitFor(()=>expect(taskFor(native,'b')&&taskFor(native,'c')).toBeTruthy());await finish(service,native,taskFor(native,'b')!.sessionId);expect(taskFor(native,'d')).toBeUndefined();await finish(service,native,taskFor(native,'c')!.sessionId);await vi.waitFor(async()=>expect((await service.get({id:workflow.id})).workflow!.executions!.find(run=>run.nodeId==='d')).toMatchObject({status:'failed',terminalReason:'context-isolation-required'}));expect(taskFor(native,'d')).toBeUndefined();expect(requested.runIds).toHaveLength(4);
+  it('joins completed parallel child results into one independent child without merging histories or respawning after restart',async()=>{
+    const first=await open(),{service,native}=first,workflow=await graph(service,'on',['a','b','c','d'],[['a','b'],['a','c'],['b','d'],['c','d']]);
+    const requested=await batch(service,workflow.id,['d','c','b','a'],'join-parallel-children');
+    await vi.waitFor(()=>expect(taskFor(native,'a')).toBeDefined());expect(taskFor(native,'b')).toBeUndefined();expect(taskFor(native,'c')).toBeUndefined();
+    await finish(service,native,taskFor(native,'a')!.sessionId);await vi.waitFor(()=>expect(taskFor(native,'b')&&taskFor(native,'c')).toBeTruthy());
+    await finish(service,native,taskFor(native,'b')!.sessionId);
+    expect(native.started.some(task=>task.text.startsWith('Task: d\n\nSCHEDULER_TOKEN_d'))).toBe(false);
+    await finish(service,native,taskFor(native,'c')!.sessionId);
+    await vi.waitFor(async()=>expect((await service.get({id:workflow.id})).workflow!.executions!.find(run=>run.nodeId==='d')).toMatchObject({status:'running',durability:'pending'}));
+    const current=(await service.get({id:workflow.id})).workflow!,joined=current.executions!.find(run=>run.nodeId==='d')!,upstream=current.executions!.filter(run=>run.nodeId!=='d');
+    const task=native.started.find(task=>task.sessionId===joined.sessionId)!;
+    expect(task.kind).toBe('subagent');expect(joined.subagent).toMatchObject({parentSessionId:task.parentSessionId,messageId:task.messageId});
+    expect(joined.inputRunIds).toEqual(expect.arrayContaining(upstream.filter(run=>run.nodeId!=='a').map(run=>run.runId)));
+    expect(new Set(joined.resultInputs!.map(input=>input.runId))).toEqual(new Set(upstream.map(run=>run.runId)));
+    expect(upstream.every(run=>run.sessionId!==joined.sessionId&&run.sessionId!==task.parentSessionId)).toBe(true);
+    expect(task.context).toEqual([]);
+    const records=JSON.parse(task.text.slice(task.text.lastIndexOf('\n[')+1)) as Array<{source:{runId:string;nodeId:string};result:string}>;
+    expect(records.map(record=>record.source.nodeId)).toEqual(['a','b','c']);
+    for(const run of upstream)expect(records.find(record=>record.source.runId===run.runId)!.result).toBe(`Controlled result for ${run.sessionId}`);
+    expect(records.filter(record=>record.source.nodeId==='a')).toHaveLength(1);
+    const before=new Map(await Promise.all(upstream.map(async run=>[run.sessionId,JSON.stringify(await native.read(run.sessionId))] as const))),started=native.started.length;
+    await first.ctx.fiber.dispose();const second=await open(first.root,native);await recover(second.service);
+    const repeated=await batch(second.service,workflow.id,['d','c','b','a'],'join-parallel-children');expect(repeated.runIds).toEqual(requested.runIds);expect(native.started).toHaveLength(started);
+    expect((await second.service.get({id:workflow.id})).workflow!.executions!.find(run=>run.runId===joined.runId)).toMatchObject({sessionId:joined.sessionId,resultInputs:joined.resultInputs,subagent:joined.subagent});
+    await finish(second.service,native,joined.sessionId);await settled(second.service,workflow.id,joined.runId);
+    const completed=(await second.service.get({id:workflow.id})).workflow!;expect(completed.nodes.find(node=>node.id==='d')!.resultStale).toBeUndefined();
+    for(const [id,bytes] of before)expect(JSON.stringify(await native.read(id))).toBe(bytes);
+    expect(native.started).toHaveLength(started);expect(requested.runIds).toHaveLength(4);
   });
   it('caps an on wave at three active children and admits the fourth only after a slot settles',async()=>{
     const {service,native}=await open(),workflow=await graph(service,'on',['a','b','c','d']);const requested=await batch(service,workflow.id,['a','b','c','d'],'bounded-wave');

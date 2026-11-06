@@ -229,6 +229,26 @@ export function assistantTextForRequest(log: NativeSessionLog, requestId: string
     .map(event => observableText(contentOf(event))).join('\n'), DETAIL_LIMIT);
 }
 
+/** Complete observable text for an exact execution boundary. Callers impose
+ * their own admission budget rather than inheriting the trace view's truncation. */
+export function assistantTextForExecution(log: NativeSessionLog, identity: NativeProjectionIdentity, endSeq: number): string {
+  const boundedLog = { ...log, events: log.events.filter(event => event.seq <= endSeq) };
+  const turns = ownedTurns(boundedLog, identity), chunks: string[] = [];
+  const lower = Math.max(log.inheritedEventCount, identity.startSeq ?? 0);
+  let currentTurn: number | undefined;
+  for (const event of boundedLog.events) {
+    if (event.seq < lower) continue;
+    if (event.type === 'turn/start') currentTurn = number(event.data.turn);
+    const turn = eventTurn(event, currentTurn);
+    if (event.type === 'assistant/message' && turn !== undefined && turns.has(turn)) {
+      const text = observableText(contentOf(event));
+      if (text) chunks.push(text);
+    }
+    if (event.type === 'turn/end') currentTurn = undefined;
+  }
+  return chunks.join('\n');
+}
+
 /** Read details from the native events when expanded; callers must not save this response in Workflow JSON. */
 export function readTraceStepDetails(log: NativeSessionLog, projection: NativeExecutionProjection, stepId: string): ExecutionStepDetails {
   const step = projection.steps.find(item => item.stepId === stepId);
