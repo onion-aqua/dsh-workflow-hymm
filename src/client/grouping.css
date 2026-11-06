@@ -1,0 +1,31 @@
+.dsh-workflow .wf-group-layer { position:absolute;left:0;top:0;width:0;height:0;z-index:5;transform-origin:0 0;pointer-events:none; }
+.dsh-workflow .wf-node-group { position:absolute;border:1px dashed #505050;border-radius:var(--wf-node-radius,18px);background:#ffffff02;pointer-events:none; }
+.dsh-workflow .wf-node-group.is-selected { border-color:var(--wf-blue,#aac0ff);background:#aac0ff04;box-shadow:0 0 0 1px #aac0ff12; }
+.dsh-workflow .wf-group-border { position:absolute;pointer-events:auto;cursor:grab; }
+.dsh-workflow .wf-group-border.is-top { top:-4px;left:0;right:0;height:8px; }
+.dsh-workflow .wf-group-border.is-bottom { bottom:-4px;left:0;right:0;height:8px; }
+.dsh-workflow .wf-group-border.is-left { left:-4px;top:0;bottom:0;width:8px; }
+.dsh-workflow .wf-group-border.is-right { right:-4px;top:0;bottom:0;width:8px; }
+.dsh-workflow .wf-group-heading { position:absolute;top:5px;left:12px;right:8px;display:flex;align-items:center;gap:7px;height:30px;color:#b7b7b7;pointer-events:auto;cursor:grab;user-select:none; }
+.dsh-workflow .wf-group-heading>svg { flex:none; }
+.dsh-workflow .wf-group-heading>[role=button] { min-width:20px;max-width:calc(100% - 92px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;outline-offset:3px; }
+.dsh-workflow .wf-group-heading small { flex:1;font-size:10px;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-group-heading input { flex:1;min-width:20px;max-width:calc(100% - 58px);padding:2px 6px;border:1px solid var(--wf-border,#353535);border-radius:6px;background:var(--wf-panel,#202020);color:var(--wf-text,#f1f1f1);font-size:12px; }
+.dsh-workflow .wf-group-heading input:focus { border-color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-group-heading button { flex:none; }
+.dsh-workflow .wf-node-group.is-selected .wf-group-heading { color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-grouping-toolbar { position:absolute;z-index:27;display:flex;align-items:center;gap:3px;padding:5px;border:1px solid var(--wf-border,#353535);border-radius:var(--wf-radius,18px);background:var(--wf-panel,#202020);box-shadow:0 8px 26px #0004;pointer-events:auto; }
+.dsh-workflow .wf-grouping-toolbar>button { display:flex;align-items:center;gap:6px;padding:6px 8px;border:0;border-radius:var(--wf-control-radius,12px);background:transparent;font-size:11px;white-space:nowrap;color:var(--wf-text,#f1f1f1); }
+.dsh-workflow .wf-grouping-toolbar>button:hover:not(:disabled) { background:#ffffff0b; }
+.dsh-workflow .wf-grouping-count { padding:0 7px;color:var(--wf-muted,#999);font-size:11px;font-variant-numeric:tabular-nums; }
+.dsh-workflow .wf-grouping-divider { width:1px;height:18px;margin:0 3px;background:var(--wf-border,#353535); }
+.dsh-workflow .wf-selection-layout-menu { position:absolute;top:calc(100% + 7px);right:0;width:182px;padding:5px;border:1px solid var(--wf-border,#353535);border-radius:var(--wf-radius,18px);background:var(--wf-panel,#202020);box-shadow:0 10px 28px #0005; }
+.dsh-workflow .wf-selection-layout-menu.opens-above { top:auto;bottom:calc(100% + 7px); }
+.dsh-workflow .wf-selection-layout-menu>button { display:flex;align-items:center;gap:12px;width:100%;padding:9px;border:0;border-radius:var(--wf-control-radius,12px);background:none;text-align:left;font-size:11px;color:var(--wf-text,#f1f1f1); }
+.dsh-workflow .wf-selection-layout-menu>button:hover { background:#ffffff0b; }
+.dsh-workflow .wf-layout-preview { display:grid;flex:none;width:33px;height:27px;gap:3px;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);padding:3px;border:1px solid #505050;border-radius:5px; }
+.dsh-workflow .wf-layout-preview i { min-width:0;border:1px solid #a3a3a3;border-radius:2px;background:#ffffff0b; }
+.dsh-workflow .wf-layout-preview.is-horizontal { grid-template-columns:repeat(4,1fr);grid-template-rows:1fr;align-items:center; }
+.dsh-workflow .wf-layout-preview.is-horizontal i { height:14px; }
+.dsh-workflow .wf-layout-preview.is-vertical { grid-template-columns:1fr;grid-template-rows:repeat(4,1fr);justify-items:center; }
+.dsh-workflow .wf-layout-preview.is-vertical i { width:17px; }

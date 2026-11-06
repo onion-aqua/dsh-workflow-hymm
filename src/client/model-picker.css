@@ -1,0 +1,48 @@
+.dsh-workflow .wf-model-picker { display:flex;flex:0 1 auto;align-items:center;gap:3px;width:max-content;min-width:0;max-width:265px;min-height:36px;padding:2px 7px;border:1px solid var(--wf-border,#353535);border-radius:var(--wf-control-radius,12px);background:var(--wf-panel,#202020);color:var(--wf-text,#f1f1f1); }
+.dsh-workflow .wf-model-picker select[hidden] { display:none!important; }
+.dsh-workflow .wf-model-trigger { display:flex;align-items:center;gap:7px;min-width:0;width:max-content;max-width:100%;padding:5px 3px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;font-size:11px;line-height:1.5;text-align:left;cursor:pointer; }
+.dsh-workflow .wf-model-trigger>svg { flex:none;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-model-trigger>span { min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
+.dsh-workflow .wf-model-chevron { transform:rotate(90deg);margin-left:1px; }
+.dsh-workflow .wf-model-trigger:disabled { cursor:default;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-model-picker:focus-within { border-color:#666;box-shadow:0 0 0 2px #ffffff08; }
+.dsh-workflow .wf-model-trigger:focus-visible { outline:none; }
+.dsh-workflow .wf-model-picker.has-error { border-color:#6c4545;color:#d3aaaa; }
+.dsh-workflow .wf-model-picker .wf-icon-button { padding:2px;flex:none; }
+.dsh-workflow .wf-model-picker.is-compact { max-width:100%;min-height:24px;padding:1px 4px;border-color:transparent;background:transparent;gap:2px; }
+.dsh-workflow .wf-model-picker.is-compact .wf-model-trigger { font-size:10px;gap:5px;padding:2px; }
+.dsh-workflow .wf-node-model-bubble { position:absolute;z-index:3;right:0;top:calc(100% + 12px);display:flex;width:max-content;max-width:100%;pointer-events:auto; }
+.dsh-workflow .wf-node-model-bubble>.wf-model-picker.is-compact { max-width:260px;min-width:0;min-height:28px;height:28px;padding:2px 8px;border:1px solid var(--wf-border,#353535);border-radius:var(--wf-pill-radius,999px);background:#222;box-shadow:0 3px 10px #0003;color:#b0b0b0; }
+.dsh-workflow .wf-node-model-bubble>.wf-model-picker.is-compact:hover,.dsh-workflow .wf-node-model-bubble>.wf-model-picker.is-compact:focus-within { border-color:#505050;background:#303030;color:#eee; }
+.dsh-workflow .wf-node-model-bubble .wf-model-trigger { max-width:100%; }
+.wf-model-menu { position:fixed;z-index:2400;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#555 transparent;padding:7px;background:var(--wf-panel,#202020);border:1px solid var(--wf-border,#353535);border-radius:16px;box-shadow:0 14px 40px #0005;color:var(--wf-text,#f1f1f1);font:12px/1.5 system-ui,sans-serif; }
+.wf-model-menu>button { display:flex;align-items:center;gap:10px;width:100%;min-height:39px;margin:2px 0;padding:9px 12px;border:0;border-radius:10px;background:none;color:inherit;text-align:left;font:inherit;cursor:pointer; }
+.wf-model-menu>button>svg { flex:none; }
+.wf-model-menu>button>span { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.wf-model-menu>button.is-selected { background:#315885;color:#f1f6ff; }
+.wf-model-menu>button:hover:not(:disabled),.wf-model-menu>button:focus-visible { outline:none;background:#ffffff0a; }
+.wf-model-menu>button.is-selected:hover,.wf-model-menu>button.is-selected:focus-visible { background:#3a6595; }
+.wf-model-menu>button:disabled { opacity:.45;cursor:default; }
+.wf-model-reasoning-popover { position:fixed; z-index:2450; box-sizing:border-box; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; width:min(330px,calc(100vw - 16px)); padding:12px 12px 10px; border:1px solid var(--wf-border,#3b3b3b); border-radius:14px; background:var(--wf-panel,#202020); color:var(--wf-text,#f1f1f1); box-shadow:0 14px 40px #0006; font:12px/1.5 system-ui,sans-serif; animation:wf-model-reasoning-enter 130ms ease-out; }
+.wf-model-reasoning-popover .wf-reasoning-slider { width:100%; min-width:0; }
+.wf-model-reasoning-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 2px 5px; color:var(--wf-muted,#aaa); font-size:11px; }
+.wf-model-reasoning-header button { display:grid; place-items:center; width:22px; height:22px; padding:0; border:0; border-radius:6px; background:transparent; color:#aaa; font-size:17px; line-height:1; cursor:pointer; }
+.wf-model-reasoning-header button:hover,.wf-model-reasoning-header button:focus-visible { background:#ffffff0d; color:#fff; outline:none; }
+.wf-model-reasoning-status,.wf-model-reasoning-error { display:block; margin:3px 2px 0; font-size:10px; }
+.wf-model-reasoning-status { color:var(--wf-muted,#999); }
+.wf-model-reasoning-error { color:#e39494; }
+.wf-model-reasoning-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:26px; padding:5px 2px 0; color:var(--wf-muted,#999); font-size:10px; }
+.wf-model-reasoning-footer button { border:0; border-radius:6px; padding:3px 6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.wf-model-reasoning-footer button:not(:disabled):hover { color:#ddd; background:#ffffff0d; }
+.wf-model-reasoning-footer button:disabled { opacity:.45; cursor:default; }
+.wf-model-reasoning-footer button:focus-visible { outline:1px solid #9b9b9b; outline-offset:1px; }
+@keyframes wf-model-reasoning-enter { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) { .wf-model-reasoning-popover { animation:none; } }
+.dsh-workflow .wf-plan-runtime-notice { display:flex;align-items:flex-start;gap:8px;margin:9px 16px 0;padding:9px 10px;border:1px solid #645244;border-radius:var(--wf-control-radius,12px);color:#c8b397;background:#3c33231c;font-size:11px; }
+.dsh-workflow .wf-plan-runtime-notice>span { flex:1;white-space:pre-wrap;overflow-wrap:anywhere; }
+.dsh-workflow .wf-plan-runtime-notice>button { flex:none;padding:0;border:0;background:none;color:inherit;text-decoration:underline; }
+.dsh-workflow .wf-plan-composer-actions { gap:8px;min-width:0;flex-wrap:wrap; }
+.dsh-workflow .wf-plan-composer-actions>.wf-plan-submit-controls { display:flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0;max-width:100%;margin-left:auto; }
+.dsh-workflow .wf-plan-submit-controls>.wf-model-picker { width:max-content;max-width:min(100%,285px);min-width:0;flex:0 1 auto;border-color:transparent;background:transparent; }
+.dsh-workflow .wf-plan-submit-controls>.wf-model-picker .wf-model-trigger { font-size:10px; }
+.dsh-workflow .wf-plan-submit-controls>.wf-plan-send { flex:none; }

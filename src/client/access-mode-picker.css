@@ -1,0 +1,35 @@
+.wf-access-picker { display:inline-flex;align-items:center;min-width:0; }
+.wf-access-menu-control { display:flex;min-width:0; }
+.wf-access-trigger { display:flex;align-items:center;gap:7px;min-height:30px;max-width:210px;min-width:0;padding:5px 3px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:11px;line-height:1.5;cursor:pointer; }
+.wf-access-trigger>svg { flex:none; }
+.wf-access-trigger>span { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.wf-access-trigger:hover:not(:disabled) { color:#fff; }
+.wf-access-trigger:disabled { opacity:.4;cursor:default; }
+.wf-access-menu-control.has-error .wf-access-trigger { color:#d3aaaa; }
+.wf-access-menu-control select[hidden] { display:none!important; }
+.wf-access-menu { position:fixed;z-index:2400;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#555 transparent;padding:6px;background:var(--wf-panel,#292929);border:1px solid var(--wf-border,#3a3a3a);border-radius:16px;box-shadow:0 14px 40px #0005;color:var(--wf-text,#f1f1f1);font:14px/1.5 system-ui,sans-serif;animation:wf-access-menu-enter .16s ease-out; }
+.wf-access-menu>button { display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer; }
+.wf-access-menu>button>svg { flex:none; }
+.wf-access-menu>button>span { display:flex;align-items:center;gap:7px;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.wf-access-menu>button>span>small { color:#999;font-size:10px;overflow:hidden;text-overflow:ellipsis; }
+.wf-access-menu>button:hover:not(:disabled),.wf-access-menu>button:focus-visible { background:#ffffff0a;outline:none; }
+.wf-access-menu>button:disabled { opacity:.4;cursor:default; }
+.wf-access-badge { flex:none;align-self:center;font-size:9px;font-weight:500;line-height:1;color:#a2a2a2;letter-spacing:.1px; }
+@keyframes wf-access-menu-enter { from { opacity:0;transform:translateY(-3px); } to { opacity:1;transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .wf-access-menu { animation:none; } }
+.wf-access-reload { display:grid;place-items:center;padding:5px;border:0;border-radius:8px;background:transparent;color:var(--wf-muted,#999);cursor:pointer; }
+.wf-access-reload:hover { background:#ffffff0b;color:#ddd; }
+.wf-access-reload:disabled { opacity:.4;cursor:default; }
+.wf-access-confirm-overlay { position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:20px;background:#0008;color:#eee;font:12px/1.65 system-ui,sans-serif; }
+.wf-access-confirm { width:min(440px,100%);padding:20px;border:1px solid #434343;border-radius:18px;background:#242424;box-shadow:0 24px 70px #0008; }
+.wf-access-confirm header { display:flex;align-items:center;gap:9px;color:#adc4ff; }
+.wf-access-confirm h3 { margin:0;font-size:14px;font-weight:600; }
+.wf-access-confirm p { white-space:pre-wrap;overflow-wrap:anywhere;color:#bbb; }
+.wf-access-confirm .wf-access-scope { color:#999;font-size:11px; }
+.wf-access-confirm label { display:flex;align-items:flex-start;gap:8px;margin:16px 0; }
+.wf-access-confirm input { margin:4px 0;accent-color:#a8c3ff; }
+.wf-access-confirm [role=alert] { color:#e3a5a5; }
+.wf-access-confirm footer { display:flex;justify-content:flex-end;gap:8px;margin-top:18px; }
+.wf-access-confirm button { padding:7px 12px;border:1px solid #484848;border-radius:10px;background:#303030;color:#eee;font:inherit;cursor:pointer; }
+.wf-access-confirm button:last-child { border-color:#aec8ff;background:#aec8ff;color:#13213b; }
+.wf-access-confirm button:disabled { opacity:.4;cursor:default; }

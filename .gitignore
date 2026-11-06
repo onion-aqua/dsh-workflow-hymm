@@ -1,0 +1,7 @@
+node_modules/
+artifacts/*
+!artifacts/.gitkeep
+.test-work/
+test-results/
+playwright-report/
+*.tgz

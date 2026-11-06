@@ -1,0 +1,47 @@
+.dsh-workflow .wf-question-layer { position:absolute;inset:0;z-index:36;pointer-events:none; }
+.dsh-workflow .wf-question-position { position:absolute;pointer-events:auto; }
+.dsh-workflow .wf-question-position[hidden] { display:none!important; }
+.dsh-workflow .wf-question-panel { display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;border:1px solid #5a7399;border-radius:18px;background:var(--wf-panel,#202020);box-shadow:0 16px 48px #0007;color:var(--wf-text,#f1f1f1);font-size:12px; }
+.dsh-workflow .wf-question-header { display:flex;align-items:center;gap:9px;flex:none;min-height:60px;padding:12px 14px;border-bottom:1px solid var(--wf-border,#353535);color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-question-header>svg { flex:none; }
+.dsh-workflow .wf-question-header>div { display:flex;flex:1;flex-direction:column;gap:3px;min-width:0; }
+.dsh-workflow .wf-question-header strong { font-size:12px;font-weight:600; }
+.dsh-workflow .wf-question-header span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--wf-muted,#999);font-size:10px; }
+.dsh-workflow .wf-question-header>small { font-size:10px;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-question-header>.wf-icon-button { flex:none;padding:3px;border-radius:8px;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-question-panel>form { display:flex;flex:1;flex-direction:column;min-height:0; }
+.dsh-workflow .wf-question-body { flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px;scrollbar-width:thin;scrollbar-color:#555 transparent; }
+.dsh-workflow .wf-question-body fieldset { min-width:0;margin:0;padding:0;border:0; }
+.dsh-workflow .wf-question-body fieldset+fieldset { margin-top:20px;padding-top:16px;border-top:1px solid var(--wf-border,#353535); }
+.dsh-workflow .wf-question-body legend { display:flex;align-items:center;gap:8px;width:100%;padding:0;margin-bottom:8px;color:var(--wf-muted,#999);font-size:10px; }
+.dsh-workflow .wf-question-body legend>small { margin-left:auto;font-size:10px; }
+.dsh-workflow .wf-question-prompt { margin-bottom:12px;color:var(--wf-text,#f1f1f1);font-size:13px; }
+.dsh-workflow .wf-question-detail { margin:-4px 0 12px;color:#aaa;font-size:11px; }
+.dsh-workflow .wf-question-option { display:flex;align-items:flex-start;gap:9px;margin:7px 0;padding:10px 11px;border:1px solid var(--wf-border,#353535);border-radius:11px;background:#ffffff03;cursor:pointer; }
+.dsh-workflow .wf-question-option:hover { background:#ffffff07; }
+.dsh-workflow .wf-question-option.is-selected { border-color:#7094cd;background:#83aaff0d; }
+.dsh-workflow .wf-question-option input { flex:none;margin:3px 0 0;accent-color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-question-option>span { display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere; }
+.dsh-workflow .wf-question-option b { font-size:12px;font-weight:500; }
+.dsh-workflow .wf-question-option small { color:var(--wf-muted,#999);font-size:11px;line-height:1.5; }
+.dsh-workflow .wf-question-item-actions { display:flex;justify-content:space-between;gap:8px;margin:9px 0 0; }
+.dsh-workflow .wf-question-item-actions>button { display:inline-flex;align-items:center;gap:5px;padding:5px 0;border:0;background:transparent;color:#aaa;font-size:10px; }
+.dsh-workflow .wf-question-item-actions>button[aria-pressed=true] { color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-question-body textarea { display:block;width:100%;min-height:70px;max-height:180px;margin-top:8px;padding:9px 10px;border:1px solid var(--wf-border,#353535);border-radius:10px;background:var(--wf-card,#191919);color:var(--wf-text,#f1f1f1);font-size:12px;line-height:1.6;resize:vertical; }
+.dsh-workflow .wf-question-body textarea:focus { border-color:#7094cd;box-shadow:0 0 0 2px #83aaff12; }
+.dsh-workflow .wf-question-skipped,.dsh-workflow .wf-question-state { margin:9px 0 0;color:var(--wf-blue,#aac0ff);font-size:11px; }
+.dsh-workflow .wf-question-state>button { display:block;margin-top:7px;padding:0;border:0;background:none;color:var(--wf-blue,#aac0ff);font-size:11px; }
+.dsh-workflow .wf-question-error { color:#e2a6ac;font-size:11px;overflow-wrap:anywhere; }
+.dsh-workflow .wf-question-footer { display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;padding:10px 13px 12px;border-top:1px solid var(--wf-border,#353535); }
+.dsh-workflow .wf-question-footer .wf-button { gap:6px;min-height:30px;padding:6px 10px;font-size:11px;border-radius:10px; }
+.dsh-workflow .wf-question-inbox { position:absolute;top:83px;right:16px;display:flex;align-items:center;gap:7px;pointer-events:auto;padding:6px 10px;border:1px solid #5a7399;border-radius:10px;background:var(--wf-panel,#202020);color:var(--wf-blue,#aac0ff);font-size:11px; }
+.dsh-workflow .wf-question-load-error { position:absolute;bottom:80px;right:16px;display:flex;align-items:center;gap:10px;max-width:380px;padding:10px 12px;pointer-events:auto;border:1px solid #6a4949;border-radius:12px;background:var(--wf-panel,#202020);color:#d1a2a2;font-size:11px; }
+.dsh-workflow .wf-question-load-error>span { min-width:0;overflow-wrap:anywhere; }
+.dsh-workflow .wf-question-load-error>button { flex:none;border:0;background:none;color:inherit;text-decoration:underline;font-size:11px; }
+.dsh-workflow .wf-question-spinner { width:11px;height:11px;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:wf-question-spin .8s linear infinite; }
+@keyframes wf-question-spin { to { transform:rotate(360deg); } }
+.dsh-workflow .wf-task.is-awaiting-answer .wf-task-body { border-color:#86adf5;border-style:dashed;animation:wf-await-answer 1.8s ease-in-out infinite; }
+.dsh-workflow .wf-node-answer-status { display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:#a9c7ff;font-size:10px;white-space:nowrap; }
+@keyframes wf-await-answer { 0%,100% { border-color:#9cbfff;box-shadow:0 0 0 1px #83aaff44,0 0 18px #83aaff1c; } 50% { border-color:#5474aa;box-shadow:0 0 0 1px #83aaff0d; } }
+@media(prefers-reduced-motion:reduce) { .dsh-workflow .wf-task.is-awaiting-answer .wf-task-body { animation:none;border-color:#9cbfff;border-style:dashed;box-shadow:0 0 0 1px #83aaff33; }.dsh-workflow .wf-question-spinner { animation:none; } }
+@media(max-width:1280px) { .dsh-workflow .wf-question-inbox { top:126px; } }

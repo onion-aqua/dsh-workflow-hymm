@@ -1,0 +1,30 @@
+import { expect,test,type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { addTaskNode, inlineEdit,taskNode,taskNodes,waitSaved } from './helpers.ts';
+
+test.use({viewport:{width:1500,height:950},locale:'zh-CN',colorScheme:'dark'});
+const modelA=JSON.stringify(['workflow-test','model-a']),modelB=JSON.stringify(['workflow-test','model-b']);
+const shortLabel='短模型',longLabel='长名称模型 · 复杂任务与代码审查模型 · 扩展上下文版';
+test.beforeEach(async({page})=>{
+  test.skip(process.env.WORKFLOW_EXPECT_NO_MODEL==='1','Requires only the registered local model catalog.');
+  await page.addLocatorHandler(page.getByRole('dialog',{name:/^(开始使用|Get started|Get Started)$/}),async dialog=>{await dialog.getByRole('button',{name:/^(关闭|Close)$/}).click();});
+  await page.addLocatorHandler(page.getByRole('dialog',{name:/^(预览版说明|Preview.*)$/}),async dialog=>{await dialog.getByRole('button',{name:/^(继续|Continue)$/}).click();});
+  // UI-only label variation; native model identities and the local transport stay unchanged.
+  await page.route('**/api/visualWorkflow/models',async route=>{const response=await route.fetch(),body=await response.json();const result=body.result??body;if(result.ok&&result.value?.models)result.value.models=result.value.models.map((model:{provider:string;model:string;label:string})=>({...model,label:model.model==='model-a'?shortLabel:longLabel}));await route.fulfill({response,json:body});});
+});
+async function fresh(page:Page){await page.goto(process.env.WORKFLOW_ENTRY_URL??'/');await expect.poll(async()=>await page.getByTestId('workflow-panel').isVisible()||await page.getByTestId('workflow-return').isVisible()).toBe(true);if(!await page.getByTestId('workflow-panel').isVisible())await page.getByTestId('workflow-return').click();const picker=page.getByTestId('workflow-select'),before=await picker.inputValue();await page.getByTestId('add-workflow').click();await expect(picker).not.toHaveValue(before);await waitSaved(page);await expect(page.getByTestId('global-model-picker-trigger')).toBeEnabled();}
+async function choice(page:Page,testId:string,value:string){await page.getByTestId(`${testId}-trigger`).click();const menu=page.getByTestId(`${testId}-options`);await expect(menu).toBeVisible();const options=await menu.getByRole('option').all();for(const option of options)if(await option.getAttribute('data-value')===value){await option.click();return;}throw new Error(`Missing model option ${value}`);}
+async function snapshot(page:Page,name:string){await mkdir(resolve('../../outputs/screenshots'),{recursive:true});await page.screenshot({path:resolve('../../outputs/screenshots',`model-menu-${name}.png`)});}
+
+test('global and node model menus share selected rows, keyboard navigation, portal bounds and outside dismissal',async({page})=>{
+  await fresh(page);const trigger=page.getByTestId('global-model-picker-trigger');await trigger.press('ArrowDown');const menu=page.getByTestId('global-model-picker-options');await expect(menu).toBeVisible();await expect(menu.getByRole('option',{selected:true})).toHaveCount(1);await page.keyboard.press('End');await page.keyboard.press('Enter');await expect(page.getByTestId('global-model-picker')).toHaveValue(modelB);await expect(trigger).toBeFocused();await trigger.press('ArrowDown');await expect(menu).toBeVisible();await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);await expect(trigger).toBeFocused();
+  await addTaskNode(page);const id=await taskNodes(page).last().getAttribute('data-node-id');if(!id)throw new Error('Missing task');await inlineEdit(page,id,'title','原生模型菜单');await inlineEdit(page,id,'instruction','UI only. No model request is submitted.');await waitSaved(page);
+  const pickerId=`node-model-${id}`;await page.getByTestId(`${pickerId}-trigger`).click();const nodeMenu=page.getByTestId(`${pickerId}-options`);await expect(nodeMenu).toBeVisible();expect(await nodeMenu.evaluate(element=>element.parentElement===document.body)).toBe(true);const bounds=await nodeMenu.boundingBox();expect(bounds!.x).toBeGreaterThanOrEqual(8);expect(bounds!.y).toBeGreaterThanOrEqual(8);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(1493);expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(943);await snapshot(page,'node-list');
+  const nodeOption=nodeMenu.getByRole('option').filter({hasText:shortLabel});await nodeOption.click();await expect(page.getByTestId(pickerId)).toHaveValue(modelA);await expect(page.getByTestId(`${pickerId}-trigger`)).toBeFocused();await page.getByTestId(`${pickerId}-trigger`).click();await page.getByTestId('workflow-name-input').click();await expect(nodeMenu).toHaveCount(0);await expect(taskNode(page,id)).toBeVisible();
+});
+
+test('planning model sits before Send, sizes to its label and the composer grows with wrapped input',async({page})=>{
+  await fresh(page);await page.getByTestId('plan-open').click();await choice(page,'plan-model-picker',modelA);const trigger=page.getByTestId('plan-model-picker-trigger'),short=await trigger.boundingBox();await choice(page,'plan-model-picker',modelB);const long=await trigger.boundingBox(),send=await page.getByTestId('generate-plan').boundingBox();expect(long!.width).toBeGreaterThan(short!.width+30);expect(long!.x+long!.width).toBeLessThan(send!.x);expect(Math.abs(long!.y+long!.height/2-send!.y-send!.height/2)).toBeLessThan(4);expect(await trigger.evaluate(element=>Boolean(element.closest('.wf-plan-composer')))).toBe(true);await expect(page.locator('.wf-plan-model')).toHaveCount(0);
+  const goal=page.getByTestId('plan-goal'),empty=await goal.boundingBox();await goal.fill(Array.from({length:18},(_,index)=>`第${index+1}条：规划输入随文字换行自动增高，达到上限后可以滚动。`).join('\n'));await expect.poll(async()=>(await goal.boundingBox())!.height).toBeGreaterThan(empty!.height+40);expect((await goal.boundingBox())!.height).toBeLessThanOrEqual(184);await expect(page.getByTestId('generate-plan')).toBeEnabled();await goal.fill('短目标');await expect.poll(async()=>(await goal.boundingBox())!.height).toBeCloseTo(empty!.height,0);await snapshot(page,'planning-composer');
+});

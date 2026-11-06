@@ -1,0 +1,19 @@
+// @vitest-environment jsdom
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApprovalPanel } from '../src/client/ApprovalPanel.tsx';
+import type { WorkflowPendingApproval } from '../src/shared/model.ts';
+let root:Root,container:HTMLDivElement;
+const approval:WorkflowPendingApproval={workflowId:'workflow',runId:'run',nodeId:'node',sessionId:'native-session',approvalId:'native-approval',callId:'exact-call',toolName:'bash',reason:'Review native command',command:'echo <script>unsafe</script>',input:'{"command":"echo native"}',actionable:true,createdAt:1};
+beforeEach(()=>{Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});container=document.createElement('div');document.body.append(container);root=createRoot(container);});
+afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.restoreAllMocks();});
+const element=(id:string)=>container.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!;
+async function render(extra:Partial<Parameters<typeof ApprovalPanel>[0]>={}){await act(async()=>root.render(createElement(ApprovalPanel,{approval,nodeTitle:'Native task',onDecide:async()=>{},...extra})));}
+async function click(id:string){await act(async()=>element(id).click());}
+describe('Native tool approval panel',()=>{
+  it.each(['allowed-once','rejected'] as const)('sends only the explicit %s decision with the original identities',async decision=>{const onDecide=vi.fn(async()=>{});await render({onDecide});expect(container.textContent).toContain('Review native command');expect(container.querySelector('script')).toBeNull();expect(container.querySelector('[data-testid=approval-command]')?.textContent).toContain('<script>');await click(decision==='allowed-once'?'approval-allow':'approval-reject');expect(onDecide).toHaveBeenCalledExactlyOnceWith(approval,decision);expect(element('approval-allow').disabled).toBe(true);});
+  it('hides without approving or rejecting and stops canvas shortcuts',async()=>{const onDecide=vi.fn(async()=>{}),onClose=vi.fn(),outside=vi.fn();document.addEventListener('keydown',outside);await render({onDecide,onClose});await click('approval-close');expect(onClose).toHaveBeenCalledOnce();expect(onDecide).not.toHaveBeenCalled();await act(async()=>element('approval-panel').dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Delete'})));expect(outside).not.toHaveBeenCalled();document.removeEventListener('keydown',outside);});
+  it('prevents duplicate decisions while retaining failures for an explicit retry',async()=>{let reject!:(error:Error)=>void;const onDecide=vi.fn().mockImplementationOnce(()=>new Promise<void>((_resolve,fail)=>{reject=fail;})).mockResolvedValue(undefined);await render({onDecide});await click('approval-allow');await click('approval-reject');expect(onDecide).toHaveBeenCalledOnce();await act(async()=>reject(new Error('Native wait became unavailable')));expect(container.textContent).toContain('Native wait became unavailable');expect(element('approval-allow').disabled).toBe(false);await click('approval-reject');expect(onDecide).toHaveBeenLastCalledWith(approval,'rejected');});
+  it('keeps persisted nonactionable requests read only and opens only their Session',async()=>{const onDecide=vi.fn(async()=>{}),onOpenSession=vi.fn();await render({approval:{...approval,actionable:false},onDecide,onOpenSession,otherBranch:true});expect(element('approval-allow').disabled).toBe(true);expect(element('approval-reject').disabled).toBe(true);await act(async()=>container.querySelector<HTMLButtonElement>('.wf-approval-state button')!.click());expect(onOpenSession).toHaveBeenCalledExactlyOnceWith('native-session');expect(onDecide).not.toHaveBeenCalled();});
+});

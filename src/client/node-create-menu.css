@@ -1,0 +1,15 @@
+.dsh-workflow .wf-node-create-menu{position:absolute;z-index:29;display:flex;gap:8px;pointer-events:none;isolation:isolate}
+.dsh-workflow .wf-node-create-menu>button{--wf-create-travel:-60px;display:flex;align-items:center;justify-content:center;gap:9px;min-width:142px;height:44px;padding:0 16px;border:1px solid var(--wf-border);border-radius:var(--wf-pill-radius);background:var(--wf-panel);color:var(--wf-text);font-size:12px;white-space:nowrap;box-shadow:0 8px 24px #0004;opacity:0;transform:translateX(var(--wf-create-travel)) scale(.82);visibility:hidden;transition:transform 260ms cubic-bezier(.2,.8,.2,1),opacity 160ms ease,visibility 0s 180ms,background 140ms ease,border-color 140ms ease}
+.dsh-workflow .wf-node-create-menu>button:nth-child(2){--wf-create-travel:-210px}
+.dsh-workflow .wf-node-create-menu[data-open=true]{pointer-events:auto}
+.dsh-workflow .wf-node-create-menu[data-open=true]>button{opacity:1;transform:translateX(0) scale(1);visibility:visible;transition-delay:0s;animation:wf-create-enter 280ms cubic-bezier(.2,.8,.2,1) both}
+.dsh-workflow .wf-node-create-menu[data-open=true]>button:nth-child(2){animation-delay:35ms}
+.dsh-workflow .wf-node-create-menu>button:hover:not(:disabled){background:#303030;border-color:#555}
+.dsh-workflow .wf-node-create-menu>button:active:not(:disabled){transform:scale(.96)}
+.dsh-workflow .wf-node-create-menu>button>svg{flex:none;color:var(--wf-muted)}
+.dsh-workflow .wf-node-create-menu.is-stacked{flex-direction:column}
+.dsh-workflow .wf-node-create-menu.is-stacked>button:nth-child(2){--wf-create-travel:-60px}
+.dsh-workflow .wf-dock-add>svg{transition:transform 220ms cubic-bezier(.2,.8,.2,1)}
+.dsh-workflow .wf-dock-add[aria-expanded=true]>svg{transform:rotate(45deg)}
+@keyframes wf-create-enter{from{opacity:0;transform:translateX(var(--wf-create-travel)) scale(.82)}to{opacity:1;transform:translateX(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.dsh-workflow .wf-node-create-menu>button,.dsh-workflow .wf-dock-add>svg{transition:none!important;animation:none!important}}

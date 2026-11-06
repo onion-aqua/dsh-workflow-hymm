@@ -1,0 +1,17 @@
+.dsh-workflow .wf-markdown-content { min-width:0;overflow-wrap:anywhere;line-height:1.65;white-space:normal; }
+.dsh-workflow .wf-markdown-content>*:first-child { margin-top:0; }
+.dsh-workflow .wf-markdown-content>*:last-child { margin-bottom:0; }
+.dsh-workflow .wf-markdown-content p { margin:0 0 .65em; }
+.dsh-workflow .wf-markdown-content h1,.dsh-workflow .wf-markdown-content h2,.dsh-workflow .wf-markdown-content h3,.dsh-workflow .wf-markdown-content h4,.dsh-workflow .wf-markdown-content h5,.dsh-workflow .wf-markdown-content h6 { margin:.8em 0 .4em;line-height:1.35;font-weight:650;color:inherit; }
+.dsh-workflow .wf-markdown-content h1 { font-size:1.5em; }.dsh-workflow .wf-markdown-content h2 { font-size:1.3em; }.dsh-workflow .wf-markdown-content h3 { font-size:1.15em; }
+.dsh-workflow .wf-markdown-content strong { font-weight:700; }.dsh-workflow .wf-markdown-content em { font-style:italic; }
+.dsh-workflow .wf-markdown-content ul,.dsh-workflow .wf-markdown-content ol { margin:.5em 0;padding-left:1.6em; }
+.dsh-workflow .wf-markdown-content li>p { margin:0; }.dsh-workflow .wf-markdown-content li+li { margin-top:.2em; }
+.dsh-workflow .wf-markdown-content code { font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:.9em;background:#ffffff0b;border-radius:5px;padding:.12em .3em; }
+.dsh-workflow .wf-markdown-content pre { overflow:auto;max-height:280px;margin:.6em 0;padding:10px 12px;background:var(--wf-bg,#101010);border:1px solid var(--wf-border,#353535);border-radius:var(--wf-control-radius,12px);white-space:pre;scrollbar-width:thin;scrollbar-color:#505050 transparent; }
+.dsh-workflow .wf-markdown-content pre code { padding:0;background:none;font-size:.9em; }
+.dsh-workflow .wf-markdown-content blockquote { margin:.6em 0;padding:0 0 0 .9em;border-left:3px solid #505050;color:#b7b7b7; }
+.dsh-workflow .wf-markdown-content a { color:var(--wf-blue,#aac0ff);text-decoration:underline;text-decoration-color:#aac0ff66;text-underline-offset:.15em; }.dsh-workflow .wf-markdown-content hr { border:0;border-top:1px solid var(--wf-border,#353535);margin:.8em 0; }
+.dsh-workflow .wf-markdown-table { overflow:auto; }.dsh-workflow .wf-markdown-content table { border-collapse:collapse;font-size:.9em;width:100%; }
+.dsh-workflow .wf-markdown-content th,.dsh-workflow .wf-markdown-content td { padding:.35em .6em;border:1px solid var(--wf-border,#353535); }
+.dsh-workflow .wf-markdown-image { display:inline-block;color:var(--wf-muted,#999);border:1px dashed #505050;border-radius:6px;padding:1px 6px;font-size:.9em; }

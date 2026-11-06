@@ -1,0 +1,31 @@
+.dsh-workflow .wf-approval-layer { position:absolute;inset:0;z-index:37;pointer-events:none; }
+.dsh-workflow .wf-approval-position { position:absolute;pointer-events:auto; }
+.dsh-workflow .wf-approval-position[hidden] { display:none!important; }
+.dsh-workflow .wf-approval-panel { display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;border:1px solid #5a7399;border-radius:18px;background:var(--wf-panel,#202020);box-shadow:0 16px 48px #0007;color:var(--wf-text,#f1f1f1);font-size:12px; }
+.dsh-workflow .wf-approval-header { display:flex;align-items:center;gap:9px;flex:none;min-height:60px;padding:12px 14px;border-bottom:1px solid var(--wf-border,#353535);color:var(--wf-blue,#aac0ff); }
+.dsh-workflow .wf-approval-header>svg { flex:none; }
+.dsh-workflow .wf-approval-header>div { display:flex;flex:1;flex-direction:column;gap:3px;min-width:0; }
+.dsh-workflow .wf-approval-header strong { font-size:12px;font-weight:600; }
+.dsh-workflow .wf-approval-header span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--wf-muted,#999);font-size:10px; }
+.dsh-workflow .wf-approval-header>small { color:var(--wf-muted,#999);font-size:10px; }
+.dsh-workflow .wf-approval-header>.wf-icon-button { flex:none;padding:3px;border-radius:8px;color:var(--wf-muted,#999); }
+.dsh-workflow .wf-approval-body { flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px;scrollbar-width:thin;scrollbar-color:#555 transparent; }
+.dsh-workflow .wf-approval-body p { margin:6px 0 12px;white-space:pre-wrap;overflow-wrap:anywhere; }
+.dsh-workflow .wf-approval-body small,.dsh-workflow .wf-approval-body summary { color:var(--wf-muted,#999);font-size:10px; }
+.dsh-workflow .wf-approval-body summary { cursor:pointer; }
+.dsh-workflow .wf-approval-body pre { max-height:180px;overflow:auto;margin:7px 0 13px;padding:10px;border:1px solid var(--wf-border,#353535);border-radius:10px;background:var(--wf-card,#191919);font:11px/1.65 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text; }
+.dsh-workflow .wf-approval-tool { display:flex;align-items:center;gap:7px;margin-bottom:12px;color:#bfd3fc; }
+.dsh-workflow .wf-approval-tool b { font-weight:500;overflow-wrap:anywhere; }
+.dsh-workflow .wf-approval-body .wf-approval-state { color:var(--wf-blue,#aac0ff);font-size:11px; }
+.dsh-workflow .wf-approval-state>button { display:block;margin-top:7px;padding:0;border:0;background:none;color:#bfd3fc;font-size:11px; }
+.dsh-workflow .wf-approval-error { color:#e2a6ac;font-size:11px;overflow-wrap:anywhere; }
+.dsh-workflow .wf-approval-footer { display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;padding:10px 13px 12px;border-top:1px solid var(--wf-border,#353535); }
+.dsh-workflow .wf-approval-footer .wf-button { gap:6px;min-height:30px;padding:6px 10px;font-size:11px;border-radius:10px; }
+.dsh-workflow .wf-approval-inbox { position:absolute;top:118px;right:16px;display:flex;align-items:center;gap:7px;pointer-events:auto;padding:6px 10px;border:1px solid #5a7399;border-radius:10px;background:var(--wf-panel,#202020);color:var(--wf-blue,#aac0ff);font-size:11px; }
+.dsh-workflow .wf-approval-load-error { position:absolute;bottom:122px;right:16px;display:flex;align-items:center;gap:10px;max-width:380px;padding:10px 12px;pointer-events:auto;border:1px solid #6a4949;border-radius:12px;background:var(--wf-panel,#202020);color:#d1a2a2;font-size:11px; }
+.dsh-workflow .wf-approval-load-error>span { min-width:0;overflow-wrap:anywhere; }
+.dsh-workflow .wf-approval-load-error>button { flex:none;border:0;background:none;color:inherit;text-decoration:underline;font-size:11px; }
+.dsh-workflow .wf-approval-spinner { width:11px;height:11px;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:wf-approval-spin .8s linear infinite; }
+@keyframes wf-approval-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .dsh-workflow .wf-approval-spinner { animation:none; } }
+@media(max-width:1280px) { .dsh-workflow .wf-approval-inbox { top:162px; } }
